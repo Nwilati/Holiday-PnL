@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Integer, Boolean, Date, DateTime, ForeignKey, Numeric, Text, CheckConstraint, Computed
-from sqlalchemy.dialects.postgresql import UUID, JSONB, INET, ARRAY
+from sqlalchemy.dialects.postgresql import UUID, JSONB, INET, ARRAY, ENUM as PgEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
@@ -108,7 +108,7 @@ class Booking(Base):
     check_out = Column(Date, nullable=False)
     nights = Column(Integer, Computed('check_out - check_in'))
     booked_at = Column(DateTime(timezone=True))
-    status = Column(String(20), default='confirmed')
+    status = Column(PgEnum('pending', 'confirmed', 'checked_in', 'completed', 'cancelled', 'no_show', name='booking_status', create_type=False), default='confirmed')
     nightly_rate = Column(Numeric(10, 2), nullable=False)
     subtotal_accommodation = Column(Numeric(10, 2))
     cleaning_fee = Column(Numeric(10, 2), default=0)
