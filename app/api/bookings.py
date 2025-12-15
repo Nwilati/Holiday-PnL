@@ -64,8 +64,10 @@ def create_booking(booking_data: BookingCreate, db: Session = Depends(get_db)):
         booking_dict['subtotal_accommodation'] = float(booking_data.nightly_rate * nights)
 
     booking_id = uuid4()
+    status_val = booking_dict.get('status', 'confirmed')
+    payout_method_val = booking_dict.get('payout_method') or None
 
-    # Use raw SQL to handle enum types
+    # Use raw SQL with CAST() instead of :: syntax
     sql = text("""
         INSERT INTO bookings (
             id, property_id, channel_id, booking_ref, confirmation_code,
@@ -81,12 +83,12 @@ def create_booking(booking_data: BookingCreate, db: Session = Depends(get_db)):
         ) VALUES (
             :id, :property_id, :channel_id, :booking_ref, :confirmation_code,
             :guest_name, :guest_email, :guest_phone, :guest_count,
-            :check_in, :check_out, :booked_at, :status::booking_status,
+            :check_in, :check_out, :booked_at, CAST(:status AS booking_status),
             :nightly_rate, :subtotal_accommodation, :cleaning_fee, :extra_guest_fee,
             :other_fees, :discount_amount, :discount_reason,
             :tourism_fee, :municipality_fee, :vat_collected,
             :platform_commission, :platform_commission_rate, :payment_processing_fee,
-            :payout_date, :payout_amount, :payout_reference, :payout_method::payment_method,
+            :payout_date, :payout_amount, :payout_reference, CAST(:payout_method AS payment_method),
             :is_paid, :cancelled_at, :cancellation_reason,
             :refund_amount, :cancellation_fee_retained, :notes, :is_locked
         )
@@ -105,7 +107,7 @@ def create_booking(booking_data: BookingCreate, db: Session = Depends(get_db)):
         'check_in': booking_dict.get('check_in'),
         'check_out': booking_dict.get('check_out'),
         'booked_at': booking_dict.get('booked_at'),
-        'status': booking_dict.get('status', 'confirmed'),
+        'status': status_val,
         'nightly_rate': booking_dict.get('nightly_rate'),
         'subtotal_accommodation': booking_dict.get('subtotal_accommodation'),
         'cleaning_fee': booking_dict.get('cleaning_fee', 0),
@@ -122,7 +124,7 @@ def create_booking(booking_data: BookingCreate, db: Session = Depends(get_db)):
         'payout_date': booking_dict.get('payout_date'),
         'payout_amount': booking_dict.get('payout_amount'),
         'payout_reference': booking_dict.get('payout_reference'),
-        'payout_method': booking_dict.get('payout_method') or None,
+        'payout_method': payout_method_val,
         'is_paid': booking_dict.get('is_paid', False),
         'cancelled_at': booking_dict.get('cancelled_at'),
         'cancellation_reason': booking_dict.get('cancellation_reason'),
@@ -162,9 +164,9 @@ def update_booking(booking_id: UUID, booking_data: BookingUpdate, db: Session = 
 
     for field, value in update_data.items():
         if field == 'status':
-            set_clauses.append(f"status = :{field}::booking_status")
+            set_clauses.append(f"status = CAST(:{field} AS booking_status)")
         elif field == 'payout_method':
-            set_clauses.append(f"payout_method = :{field}::payment_method")
+            set_clauses.append(f"payout_method = CAST(:{field} AS payment_method)")
         else:
             set_clauses.append(f"{field} = :{field}")
         params[field] = value if value != '' else None
