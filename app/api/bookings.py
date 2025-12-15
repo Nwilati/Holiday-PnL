@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List, Optional
 from uuid import UUID
 from datetime import date
@@ -28,7 +29,7 @@ def get_bookings(
     if channel_id:
         query = query.filter(Booking.channel_id == channel_id)
     if status:
-        query = query.filter(Booking.status == status)
+        query = query.filter(text(f"status::text = '{status}'"))
     if start_date:
         query = query.filter(Booking.check_in >= start_date)
     if end_date:
@@ -70,8 +71,20 @@ def create_booking(booking_data: BookingCreate, db: Session = Depends(get_db)):
         nights = (booking_data.check_out - booking_data.check_in).days
         booking_dict['subtotal_accommodation'] = booking_data.nightly_rate * nights
 
+    # Get status value and remove from dict
+    status_value = booking_dict.pop('status', 'confirmed')
+
+    # Create booking without status first
     booking = Booking(**booking_dict)
     db.add(booking)
+    db.flush()
+
+    # Update status using raw SQL to handle enum
+    db.execute(
+        text(f"UPDATE bookings SET status = :status WHERE id = :id"),
+        {"status": status_value, "id": str(booking.id)}
+    )
+
     db.commit()
     db.refresh(booking)
     return booking
@@ -106,8 +119,18 @@ def update_booking(
         )
 
     update_data = booking_data.model_dump(exclude_unset=True)
+
+    # Handle status separately
+    status_value = update_data.pop('status', None)
+
     for field, value in update_data.items():
         setattr(booking, field, value)
+
+    if status_value:
+        db.execute(
+            text(f"UPDATE bookings SET status = :status WHERE id = :id"),
+            {"status": status_value, "id": str(booking_id)}
+        )
 
     db.commit()
     db.refresh(booking)
