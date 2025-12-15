@@ -1,0 +1,6 @@
+Username 
+password: npg_tG9DE4lvZxOC
+
+psql 'postgresql://neondb_owner:npg_tG9DE4lvZxOC@ep-calm-star-aguss7in-pooler.c-2.eu-central-1.aws.neon.tech/holiday_pnl?sslmode=require&channel_binding=require'
+
+FieldValueHostep-calm-star-aguss7in-pooler.c-2.eu-central-1.aws.neon.techPort5432Databaseholiday_pnlUsernameneondb_ownerPasswordnpg_tG9DE4lvZxOCSSL ModeRequire
