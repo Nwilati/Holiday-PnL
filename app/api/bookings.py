@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 from datetime import date
 from app.core.database import get_db
 from app.models.models import Booking, Property, Channel
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/bookings", tags=["Bookings"])
 def get_bookings(
     property_id: Optional[UUID] = None,
     channel_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    booking_status: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     is_paid: Optional[bool] = None,
@@ -28,8 +28,8 @@ def get_bookings(
         query = query.filter(Booking.property_id == property_id)
     if channel_id:
         query = query.filter(Booking.channel_id == channel_id)
-    if status:
-        query = query.filter(text(f"status::text = '{status}'"))
+    if booking_status:
+        query = query.filter(text(f"status::text = '{booking_status}'"))
     if start_date:
         query = query.filter(Booking.check_in >= start_date)
     if end_date:
@@ -45,94 +45,135 @@ def create_booking(booking_data: BookingCreate, db: Session = Depends(get_db)):
     # Validate property exists
     property = db.query(Property).filter(Property.id == booking_data.property_id).first()
     if not property:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Property not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
 
     # Validate channel exists
     channel = db.query(Channel).filter(Channel.id == booking_data.channel_id).first()
     if not channel:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
 
     # Validate dates
     if booking_data.check_out <= booking_data.check_in:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Check-out must be after check-in"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Check-out must be after check-in")
+
+    booking_dict = booking_data.model_dump()
 
     # Calculate subtotal if not provided
-    booking_dict = booking_data.model_dump()
     if not booking_dict.get('subtotal_accommodation'):
         nights = (booking_data.check_out - booking_data.check_in).days
-        booking_dict['subtotal_accommodation'] = booking_data.nightly_rate * nights
+        booking_dict['subtotal_accommodation'] = float(booking_data.nightly_rate * nights)
 
-    # Get status value and remove from dict
-    status_value = booking_dict.pop('status', 'confirmed')
+    booking_id = uuid4()
 
-    # Create booking without status first
-    booking = Booking(**booking_dict)
-    db.add(booking)
-    db.flush()
+    # Use raw SQL to handle enum types
+    sql = text("""
+        INSERT INTO bookings (
+            id, property_id, channel_id, booking_ref, confirmation_code,
+            guest_name, guest_email, guest_phone, guest_count,
+            check_in, check_out, booked_at, status,
+            nightly_rate, subtotal_accommodation, cleaning_fee, extra_guest_fee,
+            other_fees, discount_amount, discount_reason,
+            tourism_fee, municipality_fee, vat_collected,
+            platform_commission, platform_commission_rate, payment_processing_fee,
+            payout_date, payout_amount, payout_reference, payout_method,
+            is_paid, cancelled_at, cancellation_reason,
+            refund_amount, cancellation_fee_retained, notes, is_locked
+        ) VALUES (
+            :id, :property_id, :channel_id, :booking_ref, :confirmation_code,
+            :guest_name, :guest_email, :guest_phone, :guest_count,
+            :check_in, :check_out, :booked_at, :status::booking_status,
+            :nightly_rate, :subtotal_accommodation, :cleaning_fee, :extra_guest_fee,
+            :other_fees, :discount_amount, :discount_reason,
+            :tourism_fee, :municipality_fee, :vat_collected,
+            :platform_commission, :platform_commission_rate, :payment_processing_fee,
+            :payout_date, :payout_amount, :payout_reference, :payout_method::payment_method,
+            :is_paid, :cancelled_at, :cancellation_reason,
+            :refund_amount, :cancellation_fee_retained, :notes, :is_locked
+        )
+    """)
 
-    # Update status using raw SQL to handle enum
-    db.execute(
-        text(f"UPDATE bookings SET status = :status WHERE id = :id"),
-        {"status": status_value, "id": str(booking.id)}
-    )
+    db.execute(sql, {
+        'id': booking_id,
+        'property_id': booking_dict.get('property_id'),
+        'channel_id': booking_dict.get('channel_id'),
+        'booking_ref': booking_dict.get('booking_ref'),
+        'confirmation_code': booking_dict.get('confirmation_code'),
+        'guest_name': booking_dict.get('guest_name'),
+        'guest_email': booking_dict.get('guest_email') or None,
+        'guest_phone': booking_dict.get('guest_phone'),
+        'guest_count': booking_dict.get('guest_count', 1),
+        'check_in': booking_dict.get('check_in'),
+        'check_out': booking_dict.get('check_out'),
+        'booked_at': booking_dict.get('booked_at'),
+        'status': booking_dict.get('status', 'confirmed'),
+        'nightly_rate': booking_dict.get('nightly_rate'),
+        'subtotal_accommodation': booking_dict.get('subtotal_accommodation'),
+        'cleaning_fee': booking_dict.get('cleaning_fee', 0),
+        'extra_guest_fee': booking_dict.get('extra_guest_fee', 0),
+        'other_fees': booking_dict.get('other_fees', 0),
+        'discount_amount': booking_dict.get('discount_amount', 0),
+        'discount_reason': booking_dict.get('discount_reason'),
+        'tourism_fee': booking_dict.get('tourism_fee', 0),
+        'municipality_fee': booking_dict.get('municipality_fee', 0),
+        'vat_collected': booking_dict.get('vat_collected', 0),
+        'platform_commission': booking_dict.get('platform_commission', 0),
+        'platform_commission_rate': booking_dict.get('platform_commission_rate'),
+        'payment_processing_fee': booking_dict.get('payment_processing_fee', 0),
+        'payout_date': booking_dict.get('payout_date'),
+        'payout_amount': booking_dict.get('payout_amount'),
+        'payout_reference': booking_dict.get('payout_reference'),
+        'payout_method': booking_dict.get('payout_method') or None,
+        'is_paid': booking_dict.get('is_paid', False),
+        'cancelled_at': booking_dict.get('cancelled_at'),
+        'cancellation_reason': booking_dict.get('cancellation_reason'),
+        'refund_amount': booking_dict.get('refund_amount', 0),
+        'cancellation_fee_retained': booking_dict.get('cancellation_fee_retained', 0),
+        'notes': booking_dict.get('notes'),
+        'is_locked': booking_dict.get('is_locked', False),
+    })
 
     db.commit()
-    db.refresh(booking)
+
+    # Fetch the created booking
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
     return booking
 
 @router.get("/{booking_id}", response_model=BookingResponse)
 def get_booking(booking_id: UUID, db: Session = Depends(get_db)):
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Booking not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
     return booking
 
 @router.put("/{booking_id}", response_model=BookingResponse)
-def update_booking(
-    booking_id: UUID,
-    booking_data: BookingUpdate,
-    db: Session = Depends(get_db)
-):
+def update_booking(booking_id: UUID, booking_data: BookingUpdate, db: Session = Depends(get_db)):
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Booking not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
 
     if booking.is_locked:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Booking is locked and cannot be edited"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Booking is locked")
 
     update_data = booking_data.model_dump(exclude_unset=True)
 
-    # Handle status separately
-    status_value = update_data.pop('status', None)
+    # Build dynamic update SQL
+    set_clauses = []
+    params = {'id': booking_id}
 
     for field, value in update_data.items():
-        setattr(booking, field, value)
+        if field == 'status':
+            set_clauses.append(f"status = :{field}::booking_status")
+        elif field == 'payout_method':
+            set_clauses.append(f"payout_method = :{field}::payment_method")
+        else:
+            set_clauses.append(f"{field} = :{field}")
+        params[field] = value if value != '' else None
 
-    if status_value:
-        db.execute(
-            text(f"UPDATE bookings SET status = :status WHERE id = :id"),
-            {"status": status_value, "id": str(booking_id)}
-        )
+    if set_clauses:
+        sql = text(f"UPDATE bookings SET {', '.join(set_clauses)}, updated_at = NOW() WHERE id = :id")
+        db.execute(sql, params)
+        db.commit()
 
-    db.commit()
     db.refresh(booking)
     return booking
 
@@ -140,17 +181,9 @@ def update_booking(
 def delete_booking(booking_id: UUID, db: Session = Depends(get_db)):
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Booking not found"
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
     if booking.is_locked:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Booking is locked and cannot be deleted"
-        )
-
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Booking is locked")
     db.delete(booking)
     db.commit()
     return None
@@ -159,11 +192,7 @@ def delete_booking(booking_id: UUID, db: Session = Depends(get_db)):
 def lock_booking(booking_id: UUID, db: Session = Depends(get_db)):
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Booking not found"
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
     booking.is_locked = True
     db.commit()
     db.refresh(booking)
