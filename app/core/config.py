@@ -1,21 +1,11 @@
-from pydantic_settings import BaseSettings
 import os
 
-class Settings(BaseSettings):
-    APP_NAME: str = "Holiday Home PnL"
-    DEBUG: bool = False
-
-    # Database - read directly from environment
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
-
-    # Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
-    ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
+class Settings:
+    APP_NAME: str = os.environ.get("APP_NAME", "Holiday Home PnL")
+    DEBUG: bool = os.environ.get("DEBUG", "False").lower() == "true"
+    DATABASE_URL: str = os.environ.get("DATABASE_URL", "")
+    SECRET_KEY: str = os.environ.get("SECRET_KEY", "default-secret-key")
+    ALGORITHM: str = os.environ.get("ALGORITHM", "HS256")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
 settings = Settings()
