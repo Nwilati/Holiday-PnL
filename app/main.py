@@ -3,24 +3,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api import auth, properties, channels, categories, bookings, expenses, dashboard
 
-# Create FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,
     description="Holiday Home P&L Management System API",
     version="1.0.0",
 )
 
-# CORS - Allow all origins for now
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
 
-# Include routers
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(properties.router, prefix="/api/v1")
 app.include_router(channels.router, prefix="/api/v1")

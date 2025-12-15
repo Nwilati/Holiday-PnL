@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
+from sqlalchemy import func, extract, cast, String
 from typing import Optional
 from uuid import UUID
 from datetime import date, datetime
@@ -34,7 +34,7 @@ def get_kpis(
         Booking.property_id == property_id,
         Booking.check_in >= start_date,
         Booking.check_in <= end_date,
-        Booking.status.notin_(['cancelled', 'no_show'])
+        cast(Booking.status, String).notin_(['cancelled', 'no_show'])
     ).first()
 
     # Get expense stats
@@ -86,7 +86,7 @@ def get_revenue_trend(
     ).filter(
         Booking.property_id == property_id,
         extract('year', Booking.check_in) == year,
-        Booking.status.notin_(['cancelled', 'no_show'])
+        cast(Booking.status, String).notin_(['cancelled', 'no_show'])
     ).group_by(
         extract('month', Booking.check_in)
     ).order_by(
@@ -142,7 +142,7 @@ def get_channel_mix(
         Booking.property_id == property_id,
         Booking.check_in >= start_date,
         Booking.check_in <= end_date,
-        Booking.status.notin_(['cancelled', 'no_show'])
+        cast(Booking.status, String).notin_(['cancelled', 'no_show'])
     ).group_by(
         Channel.id, Channel.name, Channel.color_hex
     ).all()
