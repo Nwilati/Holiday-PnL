@@ -189,7 +189,7 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
               <YAxis />
-              <Tooltip formatter={(value: number) => formatCurrency(value)} />
+              <Tooltip formatter={(value) => formatCurrency(Number(value))} />
               <Bar dataKey="net_revenue" fill="#3B82F6" name="Net Revenue" />
               <Bar dataKey="expenses" fill="#EF4444" name="Expenses" />
             </BarChart>
@@ -209,13 +209,13 @@ export default function Dashboard() {
                   cx="50%"
                   cy="50%"
                   outerRadius={100}
-                  label={({ channel_name, percentage }) => `${channel_name} (${percentage}%)`}
+                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
                 >
                   {channelMix.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.channel_color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
               </RechartsPie>
             </ResponsiveContainer>
           ) : (

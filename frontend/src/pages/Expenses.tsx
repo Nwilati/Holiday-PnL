@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import DataTable from '../components/DataTable';
 import { api } from '../api/client';
 // Types defined inline
