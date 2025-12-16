@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, X, Users as UsersIcon, Shield, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, X } from 'lucide-react';
 import { api } from '../api/client';
 
 interface User {
