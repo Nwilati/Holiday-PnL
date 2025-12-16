@@ -159,7 +159,7 @@ def update_user(user_id: str, user: UserUpdate, db: Session = Depends(get_db), a
         db.execute(
             text("""
                 UPDATE users SET email = :email, password_hash = :password_hash,
-                full_name = :full_name, role = :role::user_role, updated_at = NOW()
+                full_name = :full_name, role = CAST(:role AS user_role), updated_at = NOW()
                 WHERE id = :id
             """),
             {
@@ -174,7 +174,7 @@ def update_user(user_id: str, user: UserUpdate, db: Session = Depends(get_db), a
         db.execute(
             text("""
                 UPDATE users SET email = :email, full_name = :full_name,
-                role = :role::user_role, updated_at = NOW()
+                role = CAST(:role AS user_role), updated_at = NOW()
                 WHERE id = :id
             """),
             {
