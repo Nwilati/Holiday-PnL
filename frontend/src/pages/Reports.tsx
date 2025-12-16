@@ -180,45 +180,19 @@ export default function Reports() {
     const wb = XLSX.utils.book_new();
     const periodLabel = getReportPeriodLabel();
 
-    // Summary Sheet (for full and revenue reports)
-    if (reportType === 'full' || reportType === 'revenue') {
+    if (reportType === 'expenses') {
+      // Expenses Only Report
       const summaryData = [
-        ['P&L Report - ' + propertyName],
+        ['Expense Report - ' + propertyName],
         ['Period: ' + periodLabel],
         ['Generated: ' + format(new Date(), 'MMM d, yyyy')],
         [],
-        ['KEY PERFORMANCE INDICATORS'],
-        ['Metric', 'Value'],
-        ['Total Revenue', formatCurrency(kpis?.total_revenue)],
-        ['Net Revenue', formatCurrency(kpis?.net_revenue)],
         ['Total Expenses', formatCurrency(kpis?.total_expenses)],
-        ['Net Operating Income', formatCurrency(kpis?.noi)],
-        ['Occupancy Rate', `${toNum(kpis?.occupancy_rate).toFixed(1)}%`],
-        ['ADR', formatCurrency(kpis?.adr)],
-        ['RevPAR', formatCurrency(kpis?.revpar)],
-        ['Total Bookings', kpis?.total_bookings || 0],
-        ['Total Nights', kpis?.total_nights || 0],
       ];
       const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
-    }
 
-    // Monthly P&L Sheet (only for full report)
-    if (reportType === 'full') {
-      const monthlyHeaders = ['Month', 'Gross Revenue', 'Net Revenue', 'Expenses', 'NOI'];
-      const monthlyRows = monthlyData.map(m => [
-        m.month,
-        toNum(m.gross_revenue),
-        toNum(m.net_revenue),
-        toNum(m.expenses),
-        toNum(m.noi)
-      ]);
-      const monthlySheet = XLSX.utils.aoa_to_sheet([monthlyHeaders, ...monthlyRows]);
-      XLSX.utils.book_append_sheet(wb, monthlySheet, selectedMonth === 0 ? 'Monthly P&L' : 'P&L');
-    }
-
-    // Expense Breakdown Sheet (for full and expenses reports)
-    if (reportType === 'full' || reportType === 'expenses') {
+      // Expense Breakdown Sheet
       const expenseHeaders = ['Category', 'Amount', 'Percentage'];
       const expenseRows = expenseBreakdown.map(e => [
         e.category_name,
@@ -227,10 +201,31 @@ export default function Reports() {
       ]);
       const expenseSheet = XLSX.utils.aoa_to_sheet([expenseHeaders, ...expenseRows]);
       XLSX.utils.book_append_sheet(wb, expenseSheet, 'Expenses');
+
+      saveAs(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })]),
+        `Expense_Report_${propertyName}_${selectedYear}.xlsx`);
+      return;
     }
 
-    // Channel Performance Sheet (for full and revenue reports)
-    if (reportType === 'full' || reportType === 'revenue') {
+    if (reportType === 'revenue') {
+      // Revenue Only Report
+      const summaryData = [
+        ['Revenue Report - ' + propertyName],
+        ['Period: ' + periodLabel],
+        ['Generated: ' + format(new Date(), 'MMM d, yyyy')],
+        [],
+        ['Total Revenue', formatCurrency(kpis?.total_revenue)],
+        ['Net Revenue', formatCurrency(kpis?.net_revenue)],
+        ['Total Bookings', kpis?.total_bookings || 0],
+        ['Total Nights', kpis?.total_nights || 0],
+        ['Occupancy Rate', `${toNum(kpis?.occupancy_rate).toFixed(1)}%`],
+        ['ADR', formatCurrency(kpis?.adr)],
+        ['RevPAR', formatCurrency(kpis?.revpar)],
+      ];
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+
+      // Channel Performance Sheet
       const channelHeaders = ['Channel', 'Bookings', 'Nights', 'Revenue', 'Percentage'];
       const channelRows = channelMix.map(c => [
         c.channel_name,
@@ -241,17 +236,50 @@ export default function Reports() {
       ]);
       const channelSheet = XLSX.utils.aoa_to_sheet([channelHeaders, ...channelRows]);
       XLSX.utils.book_append_sheet(wb, channelSheet, 'Channel Mix');
+
+      saveAs(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })]),
+        `Revenue_Report_${propertyName}_${selectedYear}.xlsx`);
+      return;
     }
 
-    // Save file
-    const reportTypeLabel = reportType === 'full' ? 'PnL' : reportType === 'expenses' ? 'Expenses' : 'Revenue';
-    const fileName = selectedMonth === 0
-      ? `${reportTypeLabel}_Report_${propertyName}_${selectedYear}.xlsx`
-      : `${reportTypeLabel}_Report_${propertyName}_${months[selectedMonth].label}_${selectedYear}.xlsx`;
+    // Full P&L Report
+    const summaryData = [
+      ['P&L Report - ' + propertyName],
+      ['Period: ' + periodLabel],
+      ['Generated: ' + format(new Date(), 'MMM d, yyyy')],
+      [],
+      ['KEY PERFORMANCE INDICATORS'],
+      ['Metric', 'Value'],
+      ['Total Revenue', formatCurrency(kpis?.total_revenue)],
+      ['Net Revenue', formatCurrency(kpis?.net_revenue)],
+      ['Total Expenses', formatCurrency(kpis?.total_expenses)],
+      ['Net Operating Income', formatCurrency(kpis?.noi)],
+      ['Occupancy Rate', `${toNum(kpis?.occupancy_rate).toFixed(1)}%`],
+      ['ADR', formatCurrency(kpis?.adr)],
+      ['RevPAR', formatCurrency(kpis?.revpar)],
+      ['Total Bookings', kpis?.total_bookings || 0],
+      ['Total Nights', kpis?.total_nights || 0],
+    ];
+    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+
+    const monthlyHeaders = ['Month', 'Gross Revenue', 'Net Revenue', 'Expenses', 'NOI'];
+    const monthlyRows = monthlyData.map(m => [m.month, toNum(m.gross_revenue), toNum(m.net_revenue), toNum(m.expenses), toNum(m.noi)]);
+    const monthlySheet = XLSX.utils.aoa_to_sheet([monthlyHeaders, ...monthlyRows]);
+    XLSX.utils.book_append_sheet(wb, monthlySheet, 'Monthly P&L');
+
+    const expenseHeaders = ['Category', 'Amount', 'Percentage'];
+    const expenseRows = expenseBreakdown.map(e => [e.category_name, toNum(e.amount), `${toNum(e.percentage).toFixed(1)}%`]);
+    const expenseSheet = XLSX.utils.aoa_to_sheet([expenseHeaders, ...expenseRows]);
+    XLSX.utils.book_append_sheet(wb, expenseSheet, 'Expenses');
+
+    const channelHeaders = ['Channel', 'Bookings', 'Nights', 'Revenue', 'Percentage'];
+    const channelRows = channelMix.map(c => [c.channel_name, c.bookings, c.nights, toNum(c.revenue), `${toNum(c.percentage).toFixed(1)}%`]);
+    const channelSheet = XLSX.utils.aoa_to_sheet([channelHeaders, ...channelRows]);
+    XLSX.utils.book_append_sheet(wb, channelSheet, 'Channel Mix');
 
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(data, fileName);
+    saveAs(new Blob([excelBuffer]), `PnL_Report_${propertyName}_${selectedYear}.xlsx`);
   };
 
   const exportToPDF = () => {
