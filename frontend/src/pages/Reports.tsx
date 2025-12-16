@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import { FileSpreadsheet, FileText, Download, Calendar } from 'lucide-react';
+import { FileSpreadsheet, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
