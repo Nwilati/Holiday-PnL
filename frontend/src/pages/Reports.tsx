@@ -80,6 +80,7 @@ export default function Reports() {
   const [channelMix, setChannelMix] = useState<ChannelPerformance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [propertyName, setPropertyName] = useState('');
+  const [reportType, setReportType] = useState<'full' | 'expenses' | 'revenue'>('full');
 
   const years = [2023, 2024, 2025, 2026, 2027];
 
@@ -179,65 +180,74 @@ export default function Reports() {
     const wb = XLSX.utils.book_new();
     const periodLabel = getReportPeriodLabel();
 
-    // Summary Sheet
-    const summaryData = [
-      ['P&L Report - ' + propertyName],
-      ['Period: ' + periodLabel],
-      ['Generated: ' + format(new Date(), 'MMM d, yyyy')],
-      [],
-      ['KEY PERFORMANCE INDICATORS'],
-      ['Metric', 'Value'],
-      ['Total Revenue', formatCurrency(kpis?.total_revenue)],
-      ['Net Revenue', formatCurrency(kpis?.net_revenue)],
-      ['Total Expenses', formatCurrency(kpis?.total_expenses)],
-      ['Net Operating Income', formatCurrency(kpis?.noi)],
-      ['Occupancy Rate', `${toNum(kpis?.occupancy_rate).toFixed(1)}%`],
-      ['ADR', formatCurrency(kpis?.adr)],
-      ['RevPAR', formatCurrency(kpis?.revpar)],
-      ['Total Bookings', kpis?.total_bookings || 0],
-      ['Total Nights', kpis?.total_nights || 0],
-    ];
-    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+    // Summary Sheet (for full and revenue reports)
+    if (reportType === 'full' || reportType === 'revenue') {
+      const summaryData = [
+        ['P&L Report - ' + propertyName],
+        ['Period: ' + periodLabel],
+        ['Generated: ' + format(new Date(), 'MMM d, yyyy')],
+        [],
+        ['KEY PERFORMANCE INDICATORS'],
+        ['Metric', 'Value'],
+        ['Total Revenue', formatCurrency(kpis?.total_revenue)],
+        ['Net Revenue', formatCurrency(kpis?.net_revenue)],
+        ['Total Expenses', formatCurrency(kpis?.total_expenses)],
+        ['Net Operating Income', formatCurrency(kpis?.noi)],
+        ['Occupancy Rate', `${toNum(kpis?.occupancy_rate).toFixed(1)}%`],
+        ['ADR', formatCurrency(kpis?.adr)],
+        ['RevPAR', formatCurrency(kpis?.revpar)],
+        ['Total Bookings', kpis?.total_bookings || 0],
+        ['Total Nights', kpis?.total_nights || 0],
+      ];
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+    }
 
-    // Monthly P&L Sheet (or single month)
-    const monthlyHeaders = ['Month', 'Gross Revenue', 'Net Revenue', 'Expenses', 'NOI'];
-    const monthlyRows = monthlyData.map(m => [
-      m.month,
-      toNum(m.gross_revenue),
-      toNum(m.net_revenue),
-      toNum(m.expenses),
-      toNum(m.noi)
-    ]);
-    const monthlySheet = XLSX.utils.aoa_to_sheet([monthlyHeaders, ...monthlyRows]);
-    XLSX.utils.book_append_sheet(wb, monthlySheet, selectedMonth === 0 ? 'Monthly P&L' : 'P&L');
+    // Monthly P&L Sheet (only for full report)
+    if (reportType === 'full') {
+      const monthlyHeaders = ['Month', 'Gross Revenue', 'Net Revenue', 'Expenses', 'NOI'];
+      const monthlyRows = monthlyData.map(m => [
+        m.month,
+        toNum(m.gross_revenue),
+        toNum(m.net_revenue),
+        toNum(m.expenses),
+        toNum(m.noi)
+      ]);
+      const monthlySheet = XLSX.utils.aoa_to_sheet([monthlyHeaders, ...monthlyRows]);
+      XLSX.utils.book_append_sheet(wb, monthlySheet, selectedMonth === 0 ? 'Monthly P&L' : 'P&L');
+    }
 
-    // Expense Breakdown Sheet
-    const expenseHeaders = ['Category', 'Amount', 'Percentage'];
-    const expenseRows = expenseBreakdown.map(e => [
-      e.category_name,
-      toNum(e.amount),
-      `${toNum(e.percentage).toFixed(1)}%`
-    ]);
-    const expenseSheet = XLSX.utils.aoa_to_sheet([expenseHeaders, ...expenseRows]);
-    XLSX.utils.book_append_sheet(wb, expenseSheet, 'Expenses');
+    // Expense Breakdown Sheet (for full and expenses reports)
+    if (reportType === 'full' || reportType === 'expenses') {
+      const expenseHeaders = ['Category', 'Amount', 'Percentage'];
+      const expenseRows = expenseBreakdown.map(e => [
+        e.category_name,
+        toNum(e.amount),
+        `${toNum(e.percentage).toFixed(1)}%`
+      ]);
+      const expenseSheet = XLSX.utils.aoa_to_sheet([expenseHeaders, ...expenseRows]);
+      XLSX.utils.book_append_sheet(wb, expenseSheet, 'Expenses');
+    }
 
-    // Channel Performance Sheet
-    const channelHeaders = ['Channel', 'Bookings', 'Nights', 'Revenue', 'Percentage'];
-    const channelRows = channelMix.map(c => [
-      c.channel_name,
-      c.bookings,
-      c.nights,
-      toNum(c.revenue),
-      `${toNum(c.percentage).toFixed(1)}%`
-    ]);
-    const channelSheet = XLSX.utils.aoa_to_sheet([channelHeaders, ...channelRows]);
-    XLSX.utils.book_append_sheet(wb, channelSheet, 'Channel Mix');
+    // Channel Performance Sheet (for full and revenue reports)
+    if (reportType === 'full' || reportType === 'revenue') {
+      const channelHeaders = ['Channel', 'Bookings', 'Nights', 'Revenue', 'Percentage'];
+      const channelRows = channelMix.map(c => [
+        c.channel_name,
+        c.bookings,
+        c.nights,
+        toNum(c.revenue),
+        `${toNum(c.percentage).toFixed(1)}%`
+      ]);
+      const channelSheet = XLSX.utils.aoa_to_sheet([channelHeaders, ...channelRows]);
+      XLSX.utils.book_append_sheet(wb, channelSheet, 'Channel Mix');
+    }
 
     // Save file
+    const reportTypeLabel = reportType === 'full' ? 'PnL' : reportType === 'expenses' ? 'Expenses' : 'Revenue';
     const fileName = selectedMonth === 0
-      ? `PnL_Report_${propertyName}_${selectedYear}.xlsx`
-      : `PnL_Report_${propertyName}_${months[selectedMonth].label}_${selectedYear}.xlsx`;
+      ? `${reportTypeLabel}_Report_${propertyName}_${selectedYear}.xlsx`
+      : `${reportTypeLabel}_Report_${propertyName}_${months[selectedMonth].label}_${selectedYear}.xlsx`;
 
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -391,6 +401,15 @@ export default function Reports() {
               </option>
             ))}
           </select>
+          <select
+            value={reportType}
+            onChange={(e) => setReportType(e.target.value as 'full' | 'expenses' | 'revenue')}
+            className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="full">Full P&L Report</option>
+            <option value="expenses">Expenses Only</option>
+            <option value="revenue">Revenue Only</option>
+          </select>
         </div>
         <div className="flex gap-2">
           <button
@@ -418,138 +437,146 @@ export default function Reports() {
       </div>
 
       {/* KPIs Summary */}
-      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <h2 className="text-lg font-semibold mb-4">Key Performance Indicators</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-gray-600">Total Revenue</p>
-            <p className="text-xl font-bold text-blue-600">{formatCurrency(kpis?.total_revenue)}</p>
-          </div>
-          <div className="p-4 bg-green-50 rounded-lg">
-            <p className="text-sm text-gray-600">Net Revenue</p>
-            <p className="text-xl font-bold text-green-600">{formatCurrency(kpis?.net_revenue)}</p>
-          </div>
-          <div className="p-4 bg-red-50 rounded-lg">
-            <p className="text-sm text-gray-600">Total Expenses</p>
-            <p className="text-xl font-bold text-red-600">{formatCurrency(kpis?.total_expenses)}</p>
-          </div>
-          <div className="p-4 bg-purple-50 rounded-lg">
-            <p className="text-sm text-gray-600">NOI</p>
-            <p className="text-xl font-bold text-purple-600">{formatCurrency(kpis?.noi)}</p>
-          </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">Occupancy</p>
-            <p className="text-xl font-bold text-gray-700">{toNum(kpis?.occupancy_rate).toFixed(1)}%</p>
-          </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">ADR</p>
-            <p className="text-xl font-bold text-gray-700">{formatCurrency(kpis?.adr)}</p>
-          </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">RevPAR</p>
-            <p className="text-xl font-bold text-gray-700">{formatCurrency(kpis?.revpar)}</p>
-          </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">Bookings</p>
-            <p className="text-xl font-bold text-gray-700">{kpis?.total_bookings || 0}</p>
+      {(reportType === 'full' || reportType === 'revenue') && (
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">Key Performance Indicators</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 bg-blue-50 rounded-lg">
+              <p className="text-sm text-gray-600">Total Revenue</p>
+              <p className="text-xl font-bold text-blue-600">{formatCurrency(kpis?.total_revenue)}</p>
+            </div>
+            <div className="p-4 bg-green-50 rounded-lg">
+              <p className="text-sm text-gray-600">Net Revenue</p>
+              <p className="text-xl font-bold text-green-600">{formatCurrency(kpis?.net_revenue)}</p>
+            </div>
+            <div className="p-4 bg-red-50 rounded-lg">
+              <p className="text-sm text-gray-600">Total Expenses</p>
+              <p className="text-xl font-bold text-red-600">{formatCurrency(kpis?.total_expenses)}</p>
+            </div>
+            <div className="p-4 bg-purple-50 rounded-lg">
+              <p className="text-sm text-gray-600">NOI</p>
+              <p className="text-xl font-bold text-purple-600">{formatCurrency(kpis?.noi)}</p>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600">Occupancy</p>
+              <p className="text-xl font-bold text-gray-700">{toNum(kpis?.occupancy_rate).toFixed(1)}%</p>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600">ADR</p>
+              <p className="text-xl font-bold text-gray-700">{formatCurrency(kpis?.adr)}</p>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600">RevPAR</p>
+              <p className="text-xl font-bold text-gray-700">{formatCurrency(kpis?.revpar)}</p>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600">Bookings</p>
+              <p className="text-xl font-bold text-gray-700">{kpis?.total_bookings || 0}</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Monthly P&L Table */}
-      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <h2 className="text-lg font-semibold mb-4">
-          {selectedMonth === 0 ? 'Monthly P&L Statement' : 'P&L Statement'}
-        </h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-3 px-4">Month</th>
-                <th className="text-right py-3 px-4">Gross Revenue</th>
-                <th className="text-right py-3 px-4">Net Revenue</th>
-                <th className="text-right py-3 px-4">Expenses</th>
-                <th className="text-right py-3 px-4">NOI</th>
-              </tr>
-            </thead>
-            <tbody>
-              {monthlyData.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-gray-500">
-                    No data for this period
-                  </td>
+      {reportType === 'full' && (
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">
+            {selectedMonth === 0 ? 'Monthly P&L Statement' : 'P&L Statement'}
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-3 px-4">Month</th>
+                  <th className="text-right py-3 px-4">Gross Revenue</th>
+                  <th className="text-right py-3 px-4">Net Revenue</th>
+                  <th className="text-right py-3 px-4">Expenses</th>
+                  <th className="text-right py-3 px-4">NOI</th>
                 </tr>
-              ) : (
-                <>
-                  {monthlyData.map((row, index) => (
-                    <tr key={index} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-4 font-medium">{row.month}</td>
-                      <td className="text-right py-3 px-4">{formatCurrency(row.gross_revenue)}</td>
-                      <td className="text-right py-3 px-4">{formatCurrency(row.net_revenue)}</td>
-                      <td className="text-right py-3 px-4 text-red-600">{formatCurrency(row.expenses)}</td>
-                      <td className="text-right py-3 px-4 font-semibold">{formatCurrency(row.noi)}</td>
-                    </tr>
-                  ))}
-                  {monthlyData.length > 1 && (
-                    <tr className="bg-gray-100 font-bold">
-                      <td className="py-3 px-4">TOTAL</td>
-                      <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.gross_revenue), 0))}</td>
-                      <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.net_revenue), 0))}</td>
-                      <td className="text-right py-3 px-4 text-red-600">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.expenses), 0))}</td>
-                      <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.noi), 0))}</td>
-                    </tr>
-                  )}
-                </>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {monthlyData.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-gray-500">
+                      No data for this period
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    {monthlyData.map((row, index) => (
+                      <tr key={index} className="border-b hover:bg-gray-50">
+                        <td className="py-3 px-4 font-medium">{row.month}</td>
+                        <td className="text-right py-3 px-4">{formatCurrency(row.gross_revenue)}</td>
+                        <td className="text-right py-3 px-4">{formatCurrency(row.net_revenue)}</td>
+                        <td className="text-right py-3 px-4 text-red-600">{formatCurrency(row.expenses)}</td>
+                        <td className="text-right py-3 px-4 font-semibold">{formatCurrency(row.noi)}</td>
+                      </tr>
+                    ))}
+                    {monthlyData.length > 1 && (
+                      <tr className="bg-gray-100 font-bold">
+                        <td className="py-3 px-4">TOTAL</td>
+                        <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.gross_revenue), 0))}</td>
+                        <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.net_revenue), 0))}</td>
+                        <td className="text-right py-3 px-4 text-red-600">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.expenses), 0))}</td>
+                        <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.noi), 0))}</td>
+                      </tr>
+                    )}
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Two Column Layout */}
       <div className="grid md:grid-cols-2 gap-6">
         {/* Expense Breakdown */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold mb-4">Expense Breakdown</h2>
-          <div className="space-y-2">
-            {expenseBreakdown.length === 0 ? (
-              <p className="text-gray-500">No expenses for this period</p>
-            ) : (
-              expenseBreakdown.map((expense, index) => (
-                <div key={index} className="flex items-center justify-between py-2 border-b">
-                  <span className="text-gray-700">{expense.category_name}</span>
-                  <div className="text-right">
-                    <span className="font-medium">{formatCurrency(expense.amount)}</span>
-                    <span className="text-gray-500 text-sm ml-2">({toNum(expense.percentage).toFixed(1)}%)</span>
+        {(reportType === 'full' || reportType === 'expenses') && (
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold mb-4">Expense Breakdown</h2>
+            <div className="space-y-2">
+              {expenseBreakdown.length === 0 ? (
+                <p className="text-gray-500">No expenses for this period</p>
+              ) : (
+                expenseBreakdown.map((expense, index) => (
+                  <div key={index} className="flex items-center justify-between py-2 border-b">
+                    <span className="text-gray-700">{expense.category_name}</span>
+                    <div className="text-right">
+                      <span className="font-medium">{formatCurrency(expense.amount)}</span>
+                      <span className="text-gray-500 text-sm ml-2">({toNum(expense.percentage).toFixed(1)}%)</span>
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Channel Performance */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold mb-4">Channel Performance</h2>
-          <div className="space-y-2">
-            {channelMix.length === 0 ? (
-              <p className="text-gray-500">No bookings for this period</p>
-            ) : (
-              channelMix.map((channel, index) => (
-                <div key={index} className="flex items-center justify-between py-2 border-b">
-                  <div>
-                    <span className="text-gray-700">{channel.channel_name}</span>
-                    <span className="text-gray-500 text-sm ml-2">({channel.bookings} bookings)</span>
+        {(reportType === 'full' || reportType === 'revenue') && (
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold mb-4">Channel Performance</h2>
+            <div className="space-y-2">
+              {channelMix.length === 0 ? (
+                <p className="text-gray-500">No bookings for this period</p>
+              ) : (
+                channelMix.map((channel, index) => (
+                  <div key={index} className="flex items-center justify-between py-2 border-b">
+                    <div>
+                      <span className="text-gray-700">{channel.channel_name}</span>
+                      <span className="text-gray-500 text-sm ml-2">({channel.bookings} bookings)</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-medium">{formatCurrency(channel.revenue)}</span>
+                      <span className="text-gray-500 text-sm ml-2">({toNum(channel.percentage).toFixed(1)}%)</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="font-medium">{formatCurrency(channel.revenue)}</span>
-                    <span className="text-gray-500 text-sm ml-2">({toNum(channel.percentage).toFixed(1)}%)</span>
-                  </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
