@@ -46,6 +46,13 @@ interface ChannelPerformance {
   percentage: number;
 }
 
+// Helper to safely convert to number
+const toNum = (val: any): number => {
+  if (val === null || val === undefined) return 0;
+  const num = Number(val);
+  return isNaN(num) ? 0 : num;
+};
+
 export default function Reports() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<string>('');
@@ -99,9 +106,9 @@ export default function Reports() {
       ]);
 
       setKpis(kpiRes.data);
-      setMonthlyData(trendRes.data);
-      setExpenseBreakdown(expenseRes.data);
-      setChannelMix(channelRes.data);
+      setMonthlyData(trendRes.data || []);
+      setExpenseBreakdown(expenseRes.data || []);
+      setChannelMix(channelRes.data || []);
     } catch (error) {
       console.error('Failed to load report data:', error);
     } finally {
@@ -109,13 +116,13 @@ export default function Reports() {
     }
   };
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: any) => {
     return new Intl.NumberFormat('en-AE', {
       style: 'currency',
       currency: 'AED',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(value);
+    }).format(toNum(value));
   };
 
   const exportToExcel = () => {
@@ -129,13 +136,13 @@ export default function Reports() {
       [],
       ['KEY PERFORMANCE INDICATORS'],
       ['Metric', 'Value'],
-      ['Total Revenue', formatCurrency(kpis?.total_revenue || 0)],
-      ['Net Revenue', formatCurrency(kpis?.net_revenue || 0)],
-      ['Total Expenses', formatCurrency(kpis?.total_expenses || 0)],
-      ['Net Operating Income', formatCurrency(kpis?.noi || 0)],
-      ['Occupancy Rate', `${(kpis?.occupancy_rate || 0).toFixed(1)}%`],
-      ['ADR', formatCurrency(kpis?.adr || 0)],
-      ['RevPAR', formatCurrency(kpis?.revpar || 0)],
+      ['Total Revenue', formatCurrency(kpis?.total_revenue)],
+      ['Net Revenue', formatCurrency(kpis?.net_revenue)],
+      ['Total Expenses', formatCurrency(kpis?.total_expenses)],
+      ['Net Operating Income', formatCurrency(kpis?.noi)],
+      ['Occupancy Rate', `${toNum(kpis?.occupancy_rate).toFixed(1)}%`],
+      ['ADR', formatCurrency(kpis?.adr)],
+      ['RevPAR', formatCurrency(kpis?.revpar)],
       ['Total Bookings', kpis?.total_bookings || 0],
       ['Total Nights', kpis?.total_nights || 0],
     ];
@@ -146,10 +153,10 @@ export default function Reports() {
     const monthlyHeaders = ['Month', 'Gross Revenue', 'Net Revenue', 'Expenses', 'NOI'];
     const monthlyRows = monthlyData.map(m => [
       m.month,
-      m.gross_revenue,
-      m.net_revenue,
-      m.expenses,
-      m.noi
+      toNum(m.gross_revenue),
+      toNum(m.net_revenue),
+      toNum(m.expenses),
+      toNum(m.noi)
     ]);
     const monthlySheet = XLSX.utils.aoa_to_sheet([monthlyHeaders, ...monthlyRows]);
     XLSX.utils.book_append_sheet(wb, monthlySheet, 'Monthly P&L');
@@ -158,8 +165,8 @@ export default function Reports() {
     const expenseHeaders = ['Category', 'Amount', 'Percentage'];
     const expenseRows = expenseBreakdown.map(e => [
       e.category_name,
-      e.amount,
-      `${e.percentage.toFixed(1)}%`
+      toNum(e.amount),
+      `${toNum(e.percentage).toFixed(1)}%`
     ]);
     const expenseSheet = XLSX.utils.aoa_to_sheet([expenseHeaders, ...expenseRows]);
     XLSX.utils.book_append_sheet(wb, expenseSheet, 'Expenses');
@@ -170,8 +177,8 @@ export default function Reports() {
       c.channel_name,
       c.bookings,
       c.nights,
-      c.revenue,
-      `${c.percentage.toFixed(1)}%`
+      toNum(c.revenue),
+      `${toNum(c.percentage).toFixed(1)}%`
     ]);
     const channelSheet = XLSX.utils.aoa_to_sheet([channelHeaders, ...channelRows]);
     XLSX.utils.book_append_sheet(wb, channelSheet, 'Channel Mix');
@@ -203,13 +210,13 @@ export default function Reports() {
       startY: 60,
       head: [['Metric', 'Value']],
       body: [
-        ['Total Revenue', formatCurrency(kpis?.total_revenue || 0)],
-        ['Net Revenue', formatCurrency(kpis?.net_revenue || 0)],
-        ['Total Expenses', formatCurrency(kpis?.total_expenses || 0)],
-        ['Net Operating Income', formatCurrency(kpis?.noi || 0)],
-        ['Occupancy Rate', `${(kpis?.occupancy_rate || 0).toFixed(1)}%`],
-        ['ADR', formatCurrency(kpis?.adr || 0)],
-        ['RevPAR', formatCurrency(kpis?.revpar || 0)],
+        ['Total Revenue', formatCurrency(kpis?.total_revenue)],
+        ['Net Revenue', formatCurrency(kpis?.net_revenue)],
+        ['Total Expenses', formatCurrency(kpis?.total_expenses)],
+        ['Net Operating Income', formatCurrency(kpis?.noi)],
+        ['Occupancy Rate', `${toNum(kpis?.occupancy_rate).toFixed(1)}%`],
+        ['ADR', formatCurrency(kpis?.adr)],
+        ['RevPAR', formatCurrency(kpis?.revpar)],
       ],
       theme: 'striped',
       headStyles: { fillColor: [59, 130, 246] },
@@ -248,7 +255,7 @@ export default function Reports() {
       body: expenseBreakdown.map(e => [
         e.category_name,
         formatCurrency(e.amount),
-        `${e.percentage.toFixed(1)}%`
+        `${toNum(e.percentage).toFixed(1)}%`
       ]),
       theme: 'striped',
       headStyles: { fillColor: [59, 130, 246] },
@@ -267,7 +274,7 @@ export default function Reports() {
         c.bookings,
         c.nights,
         formatCurrency(c.revenue),
-        `${c.percentage.toFixed(1)}%`
+        `${toNum(c.percentage).toFixed(1)}%`
       ]),
       theme: 'striped',
       headStyles: { fillColor: [59, 130, 246] },
@@ -338,31 +345,31 @@ export default function Reports() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="p-4 bg-blue-50 rounded-lg">
             <p className="text-sm text-gray-600">Total Revenue</p>
-            <p className="text-xl font-bold text-blue-600">{formatCurrency(kpis?.total_revenue || 0)}</p>
+            <p className="text-xl font-bold text-blue-600">{formatCurrency(kpis?.total_revenue)}</p>
           </div>
           <div className="p-4 bg-green-50 rounded-lg">
             <p className="text-sm text-gray-600">Net Revenue</p>
-            <p className="text-xl font-bold text-green-600">{formatCurrency(kpis?.net_revenue || 0)}</p>
+            <p className="text-xl font-bold text-green-600">{formatCurrency(kpis?.net_revenue)}</p>
           </div>
           <div className="p-4 bg-red-50 rounded-lg">
             <p className="text-sm text-gray-600">Total Expenses</p>
-            <p className="text-xl font-bold text-red-600">{formatCurrency(kpis?.total_expenses || 0)}</p>
+            <p className="text-xl font-bold text-red-600">{formatCurrency(kpis?.total_expenses)}</p>
           </div>
           <div className="p-4 bg-purple-50 rounded-lg">
             <p className="text-sm text-gray-600">NOI</p>
-            <p className="text-xl font-bold text-purple-600">{formatCurrency(kpis?.noi || 0)}</p>
+            <p className="text-xl font-bold text-purple-600">{formatCurrency(kpis?.noi)}</p>
           </div>
           <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600">Occupancy</p>
-            <p className="text-xl font-bold text-gray-700">{(kpis?.occupancy_rate || 0).toFixed(1)}%</p>
+            <p className="text-xl font-bold text-gray-700">{toNum(kpis?.occupancy_rate).toFixed(1)}%</p>
           </div>
           <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600">ADR</p>
-            <p className="text-xl font-bold text-gray-700">{formatCurrency(kpis?.adr || 0)}</p>
+            <p className="text-xl font-bold text-gray-700">{formatCurrency(kpis?.adr)}</p>
           </div>
           <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600">RevPAR</p>
-            <p className="text-xl font-bold text-gray-700">{formatCurrency(kpis?.revpar || 0)}</p>
+            <p className="text-xl font-bold text-gray-700">{formatCurrency(kpis?.revpar)}</p>
           </div>
           <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600">Bookings</p>
@@ -397,10 +404,10 @@ export default function Reports() {
               ))}
               <tr className="bg-gray-100 font-bold">
                 <td className="py-3 px-4">TOTAL</td>
-                <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + m.gross_revenue, 0))}</td>
-                <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + m.net_revenue, 0))}</td>
-                <td className="text-right py-3 px-4 text-red-600">{formatCurrency(monthlyData.reduce((sum, m) => sum + m.expenses, 0))}</td>
-                <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + m.noi, 0))}</td>
+                <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.gross_revenue), 0))}</td>
+                <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.net_revenue), 0))}</td>
+                <td className="text-right py-3 px-4 text-red-600">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.expenses), 0))}</td>
+                <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.noi), 0))}</td>
               </tr>
             </tbody>
           </table>
@@ -413,15 +420,19 @@ export default function Reports() {
         <div className="bg-white rounded-xl shadow-sm p-6">
           <h2 className="text-lg font-semibold mb-4">Expense Breakdown</h2>
           <div className="space-y-2">
-            {expenseBreakdown.map((expense, index) => (
-              <div key={index} className="flex items-center justify-between py-2 border-b">
-                <span className="text-gray-700">{expense.category_name}</span>
-                <div className="text-right">
-                  <span className="font-medium">{formatCurrency(expense.amount)}</span>
-                  <span className="text-gray-500 text-sm ml-2">({expense.percentage.toFixed(1)}%)</span>
+            {expenseBreakdown.length === 0 ? (
+              <p className="text-gray-500">No expenses for this period</p>
+            ) : (
+              expenseBreakdown.map((expense, index) => (
+                <div key={index} className="flex items-center justify-between py-2 border-b">
+                  <span className="text-gray-700">{expense.category_name}</span>
+                  <div className="text-right">
+                    <span className="font-medium">{formatCurrency(expense.amount)}</span>
+                    <span className="text-gray-500 text-sm ml-2">({toNum(expense.percentage).toFixed(1)}%)</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -429,18 +440,22 @@ export default function Reports() {
         <div className="bg-white rounded-xl shadow-sm p-6">
           <h2 className="text-lg font-semibold mb-4">Channel Performance</h2>
           <div className="space-y-2">
-            {channelMix.map((channel, index) => (
-              <div key={index} className="flex items-center justify-between py-2 border-b">
-                <div>
-                  <span className="text-gray-700">{channel.channel_name}</span>
-                  <span className="text-gray-500 text-sm ml-2">({channel.bookings} bookings)</span>
+            {channelMix.length === 0 ? (
+              <p className="text-gray-500">No bookings for this period</p>
+            ) : (
+              channelMix.map((channel, index) => (
+                <div key={index} className="flex items-center justify-between py-2 border-b">
+                  <div>
+                    <span className="text-gray-700">{channel.channel_name}</span>
+                    <span className="text-gray-500 text-sm ml-2">({channel.bookings} bookings)</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium">{formatCurrency(channel.revenue)}</span>
+                    <span className="text-gray-500 text-sm ml-2">({toNum(channel.percentage).toFixed(1)}%)</span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="font-medium">{formatCurrency(channel.revenue)}</span>
-                  <span className="text-gray-500 text-sm ml-2">({channel.percentage.toFixed(1)}%)</span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
