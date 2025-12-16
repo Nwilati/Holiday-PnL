@@ -92,7 +92,14 @@ export default function Expenses() {
     setShowReceiptViewer(true);
   };
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + (e.total_amount || 0), 0);
+  // Filter expenses
+  const filteredExpenses = expenses.filter(expense => {
+    if (filters.property_id && expense.property_id !== filters.property_id) return false;
+    if (filters.category_id && expense.category_id !== filters.category_id) return false;
+    return true;
+  });
+
+  const totalExpenses = filteredExpenses.reduce((sum, e) => sum + (Number(e.total_amount) || 0), 0);
 
   const columns = [
     {
@@ -165,7 +172,10 @@ export default function Expenses() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Expenses</h1>
           <p className="text-gray-500">
-            {expenses.length} expenses • Total: {formatCurrency(totalExpenses)}
+            {filteredExpenses.length} expenses • Total: {formatCurrency(totalExpenses)}
+            {(filters.property_id || filters.category_id) && (
+              <span className="text-blue-600 ml-2">(filtered)</span>
+            )}
           </p>
         </div>
         <button
@@ -214,7 +224,7 @@ export default function Expenses() {
       <div className="bg-white rounded-xl shadow-sm">
         <DataTable
           columns={columns}
-          data={expenses}
+          data={filteredExpenses}
           onRowClick={(expense) => {
             setSelectedExpense(expense);
             setShowForm(true);
