@@ -71,6 +71,17 @@ const api = {
     axiosInstance.get('/dashboard/channel-mix', { params: { property_id: propertyId, start_date: startDate, end_date: endDate } }),
   getExpenseBreakdown: (propertyId: string, startDate: string, endDate: string) =>
     axiosInstance.get('/dashboard/expense-breakdown', { params: { property_id: propertyId, start_date: startDate, end_date: endDate } }),
+
+  // Receipts
+  uploadReceipt: (expenseId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return axiosInstance.post(`/receipts/${expenseId}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  deleteReceipt: (expenseId: string) => axiosInstance.delete(`/receipts/${expenseId}`),
+  getReceiptUrl: (expenseId: string) => `${API_BASE_URL}/receipts/${expenseId}/download`,
 };
 
 export { api };
