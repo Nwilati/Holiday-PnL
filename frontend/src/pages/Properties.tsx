@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Building2, MapPin, Users, Bed } from 'lucide-react';
+import { Plus, Building2, MapPin, Users, Bed, Trash2 } from 'lucide-react';
 import { api } from '../api/client';
 // Type defined inline
 type Property = {
@@ -33,6 +33,19 @@ export default function Properties() {
     } catch (error) {
       console.error('Error loading properties:', error);
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (propertyId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this property? This will also delete all associated bookings and expenses.')) return;
+
+    try {
+      await api.deleteProperty(propertyId);
+      loadProperties();
+    } catch (error) {
+      console.error('Failed to delete property:', error);
+      alert('Failed to delete property');
     }
   };
 
@@ -89,11 +102,20 @@ export default function Properties() {
                 <div className="p-3 bg-blue-50 rounded-lg">
                   <Building2 className="w-6 h-6 text-blue-600" />
                 </div>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  property.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                }`}>
-                  {property.is_active ? 'Active' : 'Inactive'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    property.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {property.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                  <button
+                    onClick={(e) => handleDelete(property.id, e)}
+                    className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">{property.name}</h3>
               <div className="space-y-2 text-sm text-gray-500">

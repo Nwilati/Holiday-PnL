@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Trash2 } from 'lucide-react';
 import DataTable from '../components/DataTable';
 import { api } from '../api/client';
 // Types defined inline
@@ -89,6 +89,19 @@ export default function Bookings() {
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
 
+  const handleDelete = async (bookingId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this booking?')) return;
+
+    try {
+      await api.deleteBooking(bookingId);
+      loadData();
+    } catch (error) {
+      console.error('Failed to delete booking:', error);
+      alert('Failed to delete booking');
+    }
+  };
+
   // Filter bookings
   const filteredBookings = bookings.filter(booking => {
     if (filters.property_id && booking.property_id !== filters.property_id) return false;
@@ -155,6 +168,19 @@ export default function Bookings() {
         <span className={booking.is_paid ? 'text-green-600' : 'text-red-600'}>
           {booking.is_paid ? '✓' : '✗'}
         </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (booking: Booking) => (
+        <button
+          onClick={(e) => handleDelete(booking.id, e)}
+          className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg"
+          title="Delete"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       ),
     },
   ];
