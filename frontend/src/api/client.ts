@@ -73,6 +73,7 @@ const api = {
     axiosInstance.get('/dashboard/expense-breakdown', { params: { property_id: propertyId, start_date: startDate, end_date: endDate } }),
 
   // Receipts
+  getReceipts: (expenseId: string) => axiosInstance.get(`/receipts/${expenseId}`),
   uploadReceipt: (expenseId: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -80,8 +81,16 @@ const api = {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
-  deleteReceipt: (expenseId: string) => axiosInstance.delete(`/receipts/${expenseId}`),
-  getReceiptUrl: (expenseId: string) => `${API_BASE_URL}/receipts/${expenseId}/download`,
+  uploadMultipleReceipts: (expenseId: string, files: File[]) => {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    return axiosInstance.post(`/receipts/${expenseId}/multiple`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  deleteReceipt: (expenseId: string, receiptId: string) =>
+    axiosInstance.delete(`/receipts/${expenseId}/${receiptId}`),
+  deleteAllReceipts: (expenseId: string) => axiosInstance.delete(`/receipts/${expenseId}`),
 };
 
 export { api };
