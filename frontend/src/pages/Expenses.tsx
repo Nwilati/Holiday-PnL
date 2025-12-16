@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Upload, FileText, Trash2, Download, X, Image, File } from 'lucide-react';
+import { Plus, Upload, FileText, Trash2, Download, X, Image, File, Eye, Paperclip } from 'lucide-react';
 import DataTable from '../components/DataTable';
 import { api } from '../api/client';
 
@@ -38,6 +38,8 @@ export default function Expenses() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [showReceiptViewer, setShowReceiptViewer] = useState(false);
+  const [viewingExpense, setViewingExpense] = useState<Expense | null>(null);
   const [filters, setFilters] = useState({
     property_id: '',
     category_id: '',
@@ -84,6 +86,12 @@ export default function Expenses() {
     });
   };
 
+  const handleViewReceipts = (expense: Expense, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setViewingExpense(expense);
+    setShowReceiptViewer(true);
+  };
+
   const totalExpenses = expenses.reduce((sum, e) => sum + (e.total_amount || 0), 0);
 
   const columns = [
@@ -128,15 +136,19 @@ export default function Expenses() {
     },
     {
       key: 'receipt',
-      header: 'Receipt',
+      header: 'Receipts',
       render: (expense: Expense) => (
         expense.receipt_filename ? (
-          <span className="inline-flex items-center text-green-600">
-            <FileText className="w-4 h-4 mr-1" />
-            Yes
-          </span>
+          <button
+            onClick={(e) => handleViewReceipts(expense, e)}
+            className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition-colors"
+            title="View Receipts"
+          >
+            <Paperclip className="w-3 h-3" />
+            <span className="text-xs font-medium">View</span>
+          </button>
         ) : (
-          <span className="text-gray-400">-</span>
+          <span className="text-gray-400 text-sm">None</span>
         )
       ),
     },
@@ -223,6 +235,167 @@ export default function Expenses() {
           }}
         />
       )}
+
+      {/* Receipt Viewer Modal */}
+      {showReceiptViewer && viewingExpense && (
+        <ReceiptViewer
+          expense={viewingExpense}
+          onClose={() => {
+            setShowReceiptViewer(false);
+            setViewingExpense(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Receipt Viewer Component
+interface ReceiptViewerProps {
+  expense: Expense;
+  onClose: () => void;
+}
+
+function ReceiptViewer({ expense, onClose }: ReceiptViewerProps) {
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
+
+  useEffect(() => {
+    loadReceipts();
+  }, [expense.id]);
+
+  const loadReceipts = async () => {
+    try {
+      const response = await api.getReceipts(expense.id);
+      setReceipts(response.data);
+      if (response.data.length > 0) {
+        setSelectedReceipt(response.data[0]);
+      }
+    } catch (error) {
+      console.error('Error loading receipts:', error);
+    }
+    setLoading(false);
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const getReceiptUrl = (receipt: Receipt) => {
+    return `${API_BASE_URL}/receipts/${expense.id}/${receipt.id}/download`;
+  };
+
+  const isImage = (contentType: string) => {
+    return contentType.startsWith('image/');
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+          <div>
+            <h2 className="text-lg font-bold">Receipts</h2>
+            <p className="text-sm text-gray-500">
+              {expense.vendor} • {expense.description || 'No description'}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-full">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : receipts.length === 0 ? (
+          <div className="flex items-center justify-center h-64 text-gray-500">
+            No receipts attached
+          </div>
+        ) : (
+          <div className="flex flex-1 overflow-hidden">
+            {/* Thumbnail Sidebar */}
+            <div className="w-48 border-r bg-gray-50 overflow-y-auto p-2 space-y-2">
+              {receipts.map((receipt) => (
+                <button
+                  key={receipt.id}
+                  onClick={() => setSelectedReceipt(receipt)}
+                  className={`w-full p-2 rounded-lg text-left transition-colors ${
+                    selectedReceipt?.id === receipt.id
+                      ? 'bg-blue-100 border-2 border-blue-500'
+                      : 'bg-white border border-gray-200 hover:border-blue-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {isImage(receipt.content_type) ? (
+                      <Image className="w-8 h-8 text-blue-500 flex-shrink-0" />
+                    ) : (
+                      <FileText className="w-8 h-8 text-red-500 flex-shrink-0" />
+                    )}
+                    <div className="overflow-hidden">
+                      <p className="text-xs font-medium truncate">{receipt.filename}</p>
+                      <p className="text-xs text-gray-500">{formatFileSize(receipt.file_size)}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Preview Area */}
+            <div className="flex-1 flex flex-col">
+              {selectedReceipt && (
+                <>
+                  <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-4">
+                    {isImage(selectedReceipt.content_type) ? (
+                      <img
+                        src={getReceiptUrl(selectedReceipt)}
+                        alt={selectedReceipt.filename}
+                        className="max-w-full max-h-full object-contain shadow-lg rounded"
+                      />
+                    ) : (
+                      <div className="text-center">
+                        <FileText className="w-24 h-24 text-red-400 mx-auto mb-4" />
+                        <p className="text-gray-600 mb-4">PDF Preview not available</p>
+                        <a
+                          href={getReceiptUrl(selectedReceipt)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                          <Eye className="w-4 h-4" />
+                          Open PDF
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Bar */}
+                  <div className="p-3 border-t bg-white flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-sm">{selectedReceipt.filename}</p>
+                      <p className="text-xs text-gray-500">
+                        {formatFileSize(selectedReceipt.file_size)} • {selectedReceipt.content_type}
+                      </p>
+                    </div>
+                    <a
+                      href={getReceiptUrl(selectedReceipt)}
+                      download={selectedReceipt.filename}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download
+                    </a>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -258,7 +431,6 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
     c.category_type === 'operating_expense' || c.category_type === 'capital'
   );
 
-  // Load existing receipts when editing
   useEffect(() => {
     if (expense?.id) {
       loadReceipts();
@@ -282,12 +454,10 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
     const validFiles: File[] = [];
 
     for (const file of files) {
-      // Validate file size (5MB max)
       if (file.size > 5 * 1024 * 1024) {
         alert(`${file.name} is too large. Maximum size is 5MB.`);
         continue;
       }
-      // Validate file type
       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
       if (!allowedTypes.includes(file.type)) {
         alert(`${file.name} is not a valid file type. Allowed: JPG, PNG, GIF, PDF`);
@@ -296,7 +466,6 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
       validFiles.push(file);
     }
 
-    // Check total count
     const totalCount = existingReceipts.length + pendingFiles.length + validFiles.length;
     if (totalCount > 10) {
       alert('Maximum 10 receipts per expense');
@@ -305,7 +474,6 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
 
     setPendingFiles([...pendingFiles, ...validFiles]);
 
-    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -354,7 +522,6 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
         expenseId = response.data.id;
       }
 
-      // Upload pending files
       if (pendingFiles.length > 0 && expenseId) {
         for (const file of pendingFiles) {
           await api.uploadReceipt(expenseId, file);
@@ -479,7 +646,7 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
           </div>
 
           {/* Receipt Upload Section */}
-          <div>
+          <div className="border rounded-lg p-4 bg-gray-50">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Receipts ({existingReceipts.length + pendingFiles.length}/10)
             </label>
@@ -491,11 +658,11 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
               existingReceipts.length > 0 && (
                 <div className="space-y-2 mb-3">
                   {existingReceipts.map((receipt) => (
-                    <div key={receipt.id} className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded-lg">
+                    <div key={receipt.id} className="flex items-center justify-between p-2 bg-white border border-green-200 rounded-lg">
                       <div className="flex items-center gap-2">
                         {getFileIcon(receipt.content_type)}
                         <div>
-                          <p className="text-sm font-medium text-gray-700 truncate max-w-[200px]">
+                          <p className="text-sm font-medium text-gray-700 truncate max-w-[180px]">
                             {receipt.filename}
                           </p>
                           <p className="text-xs text-gray-500">{formatFileSize(receipt.file_size)}</p>
@@ -507,9 +674,9 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-1.5 text-blue-600 hover:bg-blue-100 rounded"
-                          title="Download"
+                          title="View"
                         >
-                          <Download className="w-4 h-4" />
+                          <Eye className="w-4 h-4" />
                         </a>
                         <button
                           type="button"
@@ -534,10 +701,10 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
                     <div className="flex items-center gap-2">
                       {getFileIcon(file.type)}
                       <div>
-                        <p className="text-sm font-medium text-gray-700 truncate max-w-[200px]">
+                        <p className="text-sm font-medium text-gray-700 truncate max-w-[180px]">
                           {file.name}
                         </p>
-                        <p className="text-xs text-gray-500">{formatFileSize(file.size)} • Pending upload</p>
+                        <p className="text-xs text-blue-600">{formatFileSize(file.size)} • Will upload on save</p>
                       </div>
                     </div>
                     <button
@@ -566,13 +733,13 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors w-full justify-center"
+                  className="flex items-center px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-white transition-colors w-full justify-center"
                 >
                   <Upload className="w-4 h-4 mr-2 text-gray-500" />
                   <span className="text-sm text-gray-600">Add Receipts</span>
                 </button>
                 <p className="text-xs text-gray-500 mt-1 text-center">
-                  JPG, PNG, GIF, or PDF • Max 5MB each • Up to 10 files
+                  JPG, PNG, GIF, or PDF • Max 5MB each
                 </p>
               </div>
             )}
