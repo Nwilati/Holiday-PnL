@@ -24,6 +24,12 @@ class UserCreate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = "viewer"
 
+class UserUpdate(BaseModel):
+    email: EmailStr
+    password: Optional[str] = None
+    full_name: Optional[str] = None
+    role: Optional[str] = "viewer"
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
@@ -140,7 +146,7 @@ def list_users(db: Session = Depends(get_db), admin: dict = Depends(require_admi
     return users
 
 @router.put("/users/{user_id}", response_model=UserResponse)
-def update_user(user_id: str, user: UserCreate, db: Session = Depends(get_db), admin: dict = Depends(require_admin)):
+def update_user(user_id: str, user: UserUpdate, db: Session = Depends(get_db), admin: dict = Depends(require_admin)):
     """Update user - Admin only"""
     # Check user exists
     result = db.execute(text("SELECT id FROM users WHERE id = :id"), {"id": user_id})
