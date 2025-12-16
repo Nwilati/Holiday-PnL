@@ -195,7 +195,7 @@ export default function Dashboard() {
         />
         <KPICard
           title="Occupancy Rate"
-          value={`${(kpis?.occupancy_rate || 0).toFixed(1)}%`}
+          value={`${Number(kpis?.occupancy_rate || 0).toFixed(1)}%`}
           change="5.3%"
           changeType="up"
           icon={Calendar}
@@ -279,7 +279,7 @@ export default function Dashboard() {
               <div key={item.channel_name} className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: getChannelColor(item.channel_name) }}></div>
                 <span className="text-sm text-stone-600 truncate">{item.channel_name}</span>
-                <span className="text-sm font-medium text-stone-800 ml-auto">{item.percentage.toFixed(0)}%</span>
+                <span className="text-sm font-medium text-stone-800 ml-auto">{Number(item.percentage || 0).toFixed(0)}%</span>
               </div>
             ))}
           </div>
