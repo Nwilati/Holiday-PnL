@@ -47,7 +47,7 @@ export default function Login() {
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
               <AlertCircle className="h-5 w-5" />
-              {error}
+              <span>{error}</span>
             </div>
           )}
 
@@ -91,7 +91,7 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder=""""""""""
+                  placeholder="Enter your password"
                 />
               </div>
             </div>
