@@ -89,6 +89,21 @@ export default function Bookings() {
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
 
+  // Filter bookings
+  const filteredBookings = bookings.filter(booking => {
+    if (filters.property_id && booking.property_id !== filters.property_id) return false;
+    if (filters.status && booking.status !== filters.status) return false;
+    if (filters.search) {
+      const search = filters.search.toLowerCase();
+      const matchesGuest = booking.guest_name?.toLowerCase().includes(search);
+      const matchesRef = booking.booking_ref?.toLowerCase().includes(search);
+      if (!matchesGuest && !matchesRef) return false;
+    }
+    return true;
+  });
+
+  const totalBookings = filteredBookings.length;
+
   const columns = [
     {
       key: 'guest_name',
@@ -154,7 +169,12 @@ export default function Bookings() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Bookings</h1>
-          <p className="text-gray-500">{bookings.length} total bookings</p>
+          <p className="text-gray-500">
+            {totalBookings} bookings
+            {(filters.property_id || filters.status || filters.search) && (
+              <span className="text-blue-600 ml-2">(filtered)</span>
+            )}
+          </p>
         </div>
         <button
           onClick={() => {
@@ -214,7 +234,7 @@ export default function Bookings() {
       <div className="bg-white rounded-xl shadow-sm">
         <DataTable
           columns={columns}
-          data={bookings}
+          data={filteredBookings}
           onRowClick={(booking) => {
             setSelectedBooking(booking);
             setShowForm(true);
