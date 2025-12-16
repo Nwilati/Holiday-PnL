@@ -6,8 +6,8 @@ import Bookings from './pages/Bookings';
 import Expenses from './pages/Expenses';
 import Properties from './pages/Properties';
 import Calendar from './pages/Calendar';
-import Login from './pages/Login';
 import Reports from './pages/Reports';
+import Login from './pages/Login';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
