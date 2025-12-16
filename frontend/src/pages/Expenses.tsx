@@ -66,6 +66,19 @@ export default function Expenses() {
     }
   };
 
+  const handleDelete = async (expenseId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this expense?')) return;
+
+    try {
+      await api.deleteExpense(expenseId);
+      loadData();
+    } catch (error) {
+      console.error('Failed to delete expense:', error);
+      alert('Failed to delete expense');
+    }
+  };
+
   const getCategoryName = (categoryId: string) => {
     return categories.find(c => c.id === categoryId)?.name || 'Unknown';
   };
@@ -157,6 +170,19 @@ export default function Expenses() {
         ) : (
           <span className="text-gray-400 text-sm">None</span>
         )
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (expense: Expense) => (
+        <button
+          onClick={(e) => handleDelete(expense.id, e)}
+          className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg"
+          title="Delete"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       ),
     },
   ];
