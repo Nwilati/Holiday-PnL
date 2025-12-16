@@ -287,7 +287,90 @@ export default function Reports() {
     const pageWidth = doc.internal.pageSize.getWidth();
     const periodLabel = getReportPeriodLabel();
 
-    // Title
+    if (reportType === 'expenses') {
+      // Expenses Only PDF
+      doc.setFontSize(20);
+      doc.text('Expense Report', pageWidth / 2, 20, { align: 'center' });
+
+      doc.setFontSize(12);
+      doc.text(propertyName, pageWidth / 2, 28, { align: 'center' });
+      doc.text(`Period: ${periodLabel}`, pageWidth / 2, 35, { align: 'center' });
+      doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy')}`, pageWidth / 2, 42, { align: 'center' });
+
+      doc.setFontSize(14);
+      doc.text(`Total Expenses: ${formatCurrency(kpis?.total_expenses)}`, 14, 55);
+
+      doc.setFontSize(14);
+      doc.text('Expense Breakdown', 14, 70);
+
+      autoTable(doc, {
+        startY: 75,
+        head: [['Category', 'Amount', '%']],
+        body: expenseBreakdown.map(e => [
+          e.category_name,
+          formatCurrency(e.amount),
+          `${toNum(e.percentage).toFixed(1)}%`
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [220, 53, 69] },
+      });
+
+      doc.save(`Expense_Report_${propertyName}_${selectedYear}.pdf`);
+      return;
+    }
+
+    if (reportType === 'revenue') {
+      // Revenue Only PDF
+      doc.setFontSize(20);
+      doc.text('Revenue Report', pageWidth / 2, 20, { align: 'center' });
+
+      doc.setFontSize(12);
+      doc.text(propertyName, pageWidth / 2, 28, { align: 'center' });
+      doc.text(`Period: ${periodLabel}`, pageWidth / 2, 35, { align: 'center' });
+      doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy')}`, pageWidth / 2, 42, { align: 'center' });
+
+      doc.setFontSize(14);
+      doc.text('Revenue Summary', 14, 55);
+
+      autoTable(doc, {
+        startY: 60,
+        head: [['Metric', 'Value']],
+        body: [
+          ['Total Revenue', formatCurrency(kpis?.total_revenue)],
+          ['Net Revenue', formatCurrency(kpis?.net_revenue)],
+          ['Total Bookings', kpis?.total_bookings || 0],
+          ['Total Nights', kpis?.total_nights || 0],
+          ['Occupancy Rate', `${toNum(kpis?.occupancy_rate).toFixed(1)}%`],
+          ['ADR', formatCurrency(kpis?.adr)],
+          ['RevPAR', formatCurrency(kpis?.revpar)],
+        ],
+        theme: 'striped',
+        headStyles: { fillColor: [40, 167, 69] },
+      });
+
+      const finalY1 = (doc as any).lastAutoTable.finalY || 60;
+      doc.setFontSize(14);
+      doc.text('Channel Performance', 14, finalY1 + 15);
+
+      autoTable(doc, {
+        startY: finalY1 + 20,
+        head: [['Channel', 'Bookings', 'Nights', 'Revenue', '%']],
+        body: channelMix.map(c => [
+          c.channel_name,
+          c.bookings,
+          c.nights,
+          formatCurrency(c.revenue),
+          `${toNum(c.percentage).toFixed(1)}%`
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [40, 167, 69] },
+      });
+
+      doc.save(`Revenue_Report_${propertyName}_${selectedYear}.pdf`);
+      return;
+    }
+
+    // Full P&L Report
     doc.setFontSize(20);
     doc.text('P&L Report', pageWidth / 2, 20, { align: 'center' });
 
@@ -296,7 +379,6 @@ export default function Reports() {
     doc.text(`Period: ${periodLabel}`, pageWidth / 2, 35, { align: 'center' });
     doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy')}`, pageWidth / 2, 42, { align: 'center' });
 
-    // KPIs Table
     doc.setFontSize(14);
     doc.text('Key Performance Indicators', 14, 55);
 
@@ -316,10 +398,9 @@ export default function Reports() {
       headStyles: { fillColor: [59, 130, 246] },
     });
 
-    // Monthly P&L Table
     const finalY1 = (doc as any).lastAutoTable.finalY || 60;
     doc.setFontSize(14);
-    doc.text(selectedMonth === 0 ? 'Monthly P&L' : 'P&L Details', 14, finalY1 + 15);
+    doc.text('P&L Details', 14, finalY1 + 15);
 
     autoTable(doc, {
       startY: finalY1 + 20,
@@ -336,10 +417,8 @@ export default function Reports() {
       styles: { fontSize: 8 },
     });
 
-    // New page for more tables
     doc.addPage();
 
-    // Expense Breakdown
     doc.setFontSize(14);
     doc.text('Expense Breakdown', 14, 20);
 
@@ -355,7 +434,6 @@ export default function Reports() {
       headStyles: { fillColor: [59, 130, 246] },
     });
 
-    // Channel Mix
     const finalY2 = (doc as any).lastAutoTable.finalY || 25;
     doc.setFontSize(14);
     doc.text('Channel Performance', 14, finalY2 + 15);
@@ -374,12 +452,7 @@ export default function Reports() {
       headStyles: { fillColor: [59, 130, 246] },
     });
 
-    // Save
-    const fileName = selectedMonth === 0
-      ? `PnL_Report_${propertyName}_${selectedYear}.pdf`
-      : `PnL_Report_${propertyName}_${months[selectedMonth].label}_${selectedYear}.pdf`;
-
-    doc.save(fileName);
+    doc.save(`PnL_Report_${propertyName}_${selectedYear}.pdf`);
   };
 
   if (isLoading) {
