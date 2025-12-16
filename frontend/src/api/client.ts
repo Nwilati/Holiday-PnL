@@ -62,11 +62,15 @@ const api = {
   // Categories
   getCategories: () => axiosInstance.get('/categories'),
 
-  // Dashboard
-  getKPIs: (params: any) => axiosInstance.get('/dashboard/kpis', { params }),
-  getRevenueTrend: (params: any) => axiosInstance.get('/dashboard/revenue-trend', { params }),
-  getChannelMix: (params: any) => axiosInstance.get('/dashboard/channel-mix', { params }),
-  getExpenseBreakdown: (params: any) => axiosInstance.get('/dashboard/expense-breakdown', { params }),
+  // Dashboard - accept propertyId, startDate, endDate as separate args
+  getKPIs: (propertyId: string, startDate: string, endDate: string) =>
+    axiosInstance.get('/dashboard/kpis', { params: { property_id: propertyId, start_date: startDate, end_date: endDate } }),
+  getRevenueTrend: (propertyId: string, year: number) =>
+    axiosInstance.get('/dashboard/revenue-trend', { params: { property_id: propertyId, year } }),
+  getChannelMix: (propertyId: string, startDate: string, endDate: string) =>
+    axiosInstance.get('/dashboard/channel-mix', { params: { property_id: propertyId, start_date: startDate, end_date: endDate } }),
+  getExpenseBreakdown: (propertyId: string, startDate: string, endDate: string) =>
+    axiosInstance.get('/dashboard/expense-breakdown', { params: { property_id: propertyId, start_date: startDate, end_date: endDate } }),
 };
 
 export { api };
