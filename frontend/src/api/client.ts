@@ -30,4 +30,6 @@ api.interceptors.response.use(
   }
 );
 
+// Export both named and default
+export { api };
 export default api;
