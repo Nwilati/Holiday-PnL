@@ -7,6 +7,7 @@ import Expenses from './pages/Expenses';
 import Properties from './pages/Properties';
 import Calendar from './pages/Calendar';
 import Reports from './pages/Reports';
+import Users from './pages/Users';
 import Login from './pages/Login';
 
 // Protected Route wrapper
@@ -83,6 +84,13 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <Reports />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/users" element={
+        <ProtectedRoute>
+          <Layout>
+            <Users />
           </Layout>
         </ProtectedRoute>
       } />

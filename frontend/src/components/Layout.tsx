@@ -9,7 +9,8 @@ import {
   LogOut,
   User,
   Calendar as CalendarIcon,
-  BarChart3
+  BarChart3,
+  Users
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -27,6 +28,7 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Expenses', href: '/expenses', icon: Receipt },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
     { name: 'Properties', href: '/properties', icon: Building2 },
+    { name: 'Users', href: '/users', icon: Users },
     { name: 'Settings', href: '/settings', icon: Settings },
   ];
 

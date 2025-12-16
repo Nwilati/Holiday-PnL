@@ -91,6 +91,14 @@ const api = {
   deleteReceipt: (expenseId: string, receiptId: string) =>
     axiosInstance.delete(`/receipts/${expenseId}/${receiptId}`),
   deleteAllReceipts: (expenseId: string) => axiosInstance.delete(`/receipts/${expenseId}`),
+
+  // User Management (Admin only)
+  getUsers: () => axiosInstance.get('/auth/users'),
+  createUser: (data: { email: string; password: string; full_name?: string; role: string }) =>
+    axiosInstance.post('/auth/register', data),
+  updateUser: (userId: string, data: { email: string; password?: string; full_name?: string; role: string }) =>
+    axiosInstance.put(`/auth/users/${userId}`, data),
+  deleteUser: (userId: string) => axiosInstance.delete(`/auth/users/${userId}`),
 };
 
 export { api };
