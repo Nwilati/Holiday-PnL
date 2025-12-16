@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const API_BASE_URL = 'https://holiday-pnl-production.up.railway.app/api/v1';
 
-const api = axios.create({
+const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
@@ -10,7 +10,7 @@ const api = axios.create({
 });
 
 // Add token to requests
-api.interceptors.request.use((config) => {
+axiosInstance.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -19,7 +19,7 @@ api.interceptors.request.use((config) => {
 });
 
 // Handle 401 errors
-api.interceptors.response.use(
+axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
@@ -30,6 +30,44 @@ api.interceptors.response.use(
   }
 );
 
-// Export both named and default
+// API methods
+const api = {
+  // Base axios methods
+  get: axiosInstance.get.bind(axiosInstance),
+  post: axiosInstance.post.bind(axiosInstance),
+  put: axiosInstance.put.bind(axiosInstance),
+  delete: axiosInstance.delete.bind(axiosInstance),
+
+  // Properties
+  getProperties: () => axiosInstance.get('/properties'),
+  createProperty: (data: any) => axiosInstance.post('/properties', data),
+  updateProperty: (id: string, data: any) => axiosInstance.put(`/properties/${id}`, data),
+  deleteProperty: (id: string) => axiosInstance.delete(`/properties/${id}`),
+
+  // Bookings
+  getBookings: (params?: any) => axiosInstance.get('/bookings', { params }),
+  createBooking: (data: any) => axiosInstance.post('/bookings', data),
+  updateBooking: (id: string, data: any) => axiosInstance.put(`/bookings/${id}`, data),
+  deleteBooking: (id: string) => axiosInstance.delete(`/bookings/${id}`),
+
+  // Expenses
+  getExpenses: (params?: any) => axiosInstance.get('/expenses', { params }),
+  createExpense: (data: any) => axiosInstance.post('/expenses', data),
+  updateExpense: (id: string, data: any) => axiosInstance.put(`/expenses/${id}`, data),
+  deleteExpense: (id: string) => axiosInstance.delete(`/expenses/${id}`),
+
+  // Channels
+  getChannels: () => axiosInstance.get('/channels'),
+
+  // Categories
+  getCategories: () => axiosInstance.get('/categories'),
+
+  // Dashboard
+  getKPIs: (params: any) => axiosInstance.get('/dashboard/kpis', { params }),
+  getRevenueTrend: (params: any) => axiosInstance.get('/dashboard/revenue-trend', { params }),
+  getChannelMix: (params: any) => axiosInstance.get('/dashboard/channel-mix', { params }),
+  getExpenseBreakdown: (params: any) => axiosInstance.get('/dashboard/expense-breakdown', { params }),
+};
+
 export { api };
 export default api;
