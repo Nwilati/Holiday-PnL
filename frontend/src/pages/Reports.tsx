@@ -53,10 +53,27 @@ const toNum = (val: any): number => {
   return isNaN(num) ? 0 : num;
 };
 
+const months = [
+  { value: 0, label: 'Full Year' },
+  { value: 1, label: 'January' },
+  { value: 2, label: 'February' },
+  { value: 3, label: 'March' },
+  { value: 4, label: 'April' },
+  { value: 5, label: 'May' },
+  { value: 6, label: 'June' },
+  { value: 7, label: 'July' },
+  { value: 8, label: 'August' },
+  { value: 9, label: 'September' },
+  { value: 10, label: 'October' },
+  { value: 11, label: 'November' },
+  { value: 12, label: 'December' },
+];
+
 export default function Reports() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(0); // 0 = full year
   const [kpis, setKpis] = useState<KPIs | null>(null);
   const [monthlyData, setMonthlyData] = useState<MonthlyRevenue[]>([]);
   const [expenseBreakdown, setExpenseBreakdown] = useState<ExpenseBreakdown[]>([]);
@@ -64,7 +81,7 @@ export default function Reports() {
   const [isLoading, setIsLoading] = useState(true);
   const [propertyName, setPropertyName] = useState('');
 
-  const years = [2023, 2024, 2025, 2026];
+  const years = [2023, 2024, 2025, 2026, 2027];
 
   useEffect(() => {
     loadProperties();
@@ -74,7 +91,7 @@ export default function Reports() {
     if (selectedProperty) {
       loadReportData();
     }
-  }, [selectedProperty, selectedYear]);
+  }, [selectedProperty, selectedYear, selectedMonth]);
 
   const loadProperties = async () => {
     try {
@@ -89,10 +106,35 @@ export default function Reports() {
     }
   };
 
+  const getDateRange = () => {
+    if (selectedMonth === 0) {
+      // Full year
+      return {
+        startDate: `${selectedYear}-01-01`,
+        endDate: `${selectedYear}-12-31`
+      };
+    } else {
+      // Specific month
+      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+      const monthStr = selectedMonth.toString().padStart(2, '0');
+      return {
+        startDate: `${selectedYear}-${monthStr}-01`,
+        endDate: `${selectedYear}-${monthStr}-${lastDay}`
+      };
+    }
+  };
+
+  const getReportPeriodLabel = () => {
+    if (selectedMonth === 0) {
+      return `Year ${selectedYear}`;
+    } else {
+      return `${months[selectedMonth].label} ${selectedYear}`;
+    }
+  };
+
   const loadReportData = async () => {
     setIsLoading(true);
-    const startDate = `${selectedYear}-01-01`;
-    const endDate = `${selectedYear}-12-31`;
+    const { startDate, endDate } = getDateRange();
 
     const property = properties.find(p => p.id === selectedProperty);
     if (property) setPropertyName(property.name);
@@ -106,7 +148,15 @@ export default function Reports() {
       ]);
 
       setKpis(kpiRes.data);
-      setMonthlyData(trendRes.data || []);
+
+      // Filter monthly data if specific month selected
+      let monthData = trendRes.data || [];
+      if (selectedMonth !== 0) {
+        const monthName = months[selectedMonth].label.substring(0, 3);
+        monthData = monthData.filter((m: MonthlyRevenue) => m.month === monthName);
+      }
+      setMonthlyData(monthData);
+
       setExpenseBreakdown(expenseRes.data || []);
       setChannelMix(channelRes.data || []);
     } catch (error) {
@@ -127,11 +177,12 @@ export default function Reports() {
 
   const exportToExcel = () => {
     const wb = XLSX.utils.book_new();
+    const periodLabel = getReportPeriodLabel();
 
     // Summary Sheet
     const summaryData = [
       ['P&L Report - ' + propertyName],
-      ['Year: ' + selectedYear],
+      ['Period: ' + periodLabel],
       ['Generated: ' + format(new Date(), 'MMM d, yyyy')],
       [],
       ['KEY PERFORMANCE INDICATORS'],
@@ -149,7 +200,7 @@ export default function Reports() {
     const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
 
-    // Monthly P&L Sheet
+    // Monthly P&L Sheet (or single month)
     const monthlyHeaders = ['Month', 'Gross Revenue', 'Net Revenue', 'Expenses', 'NOI'];
     const monthlyRows = monthlyData.map(m => [
       m.month,
@@ -159,7 +210,7 @@ export default function Reports() {
       toNum(m.noi)
     ]);
     const monthlySheet = XLSX.utils.aoa_to_sheet([monthlyHeaders, ...monthlyRows]);
-    XLSX.utils.book_append_sheet(wb, monthlySheet, 'Monthly P&L');
+    XLSX.utils.book_append_sheet(wb, monthlySheet, selectedMonth === 0 ? 'Monthly P&L' : 'P&L');
 
     // Expense Breakdown Sheet
     const expenseHeaders = ['Category', 'Amount', 'Percentage'];
@@ -184,14 +235,19 @@ export default function Reports() {
     XLSX.utils.book_append_sheet(wb, channelSheet, 'Channel Mix');
 
     // Save file
+    const fileName = selectedMonth === 0
+      ? `PnL_Report_${propertyName}_${selectedYear}.xlsx`
+      : `PnL_Report_${propertyName}_${months[selectedMonth].label}_${selectedYear}.xlsx`;
+
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(data, `PnL_Report_${propertyName}_${selectedYear}.xlsx`);
+    saveAs(data, fileName);
   };
 
   const exportToPDF = () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
+    const periodLabel = getReportPeriodLabel();
 
     // Title
     doc.setFontSize(20);
@@ -199,7 +255,7 @@ export default function Reports() {
 
     doc.setFontSize(12);
     doc.text(propertyName, pageWidth / 2, 28, { align: 'center' });
-    doc.text(`Year: ${selectedYear}`, pageWidth / 2, 35, { align: 'center' });
+    doc.text(`Period: ${periodLabel}`, pageWidth / 2, 35, { align: 'center' });
     doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy')}`, pageWidth / 2, 42, { align: 'center' });
 
     // KPIs Table
@@ -225,7 +281,7 @@ export default function Reports() {
     // Monthly P&L Table
     const finalY1 = (doc as any).lastAutoTable.finalY || 60;
     doc.setFontSize(14);
-    doc.text('Monthly P&L', 14, finalY1 + 15);
+    doc.text(selectedMonth === 0 ? 'Monthly P&L' : 'P&L Details', 14, finalY1 + 15);
 
     autoTable(doc, {
       startY: finalY1 + 20,
@@ -281,7 +337,11 @@ export default function Reports() {
     });
 
     // Save
-    doc.save(`PnL_Report_${propertyName}_${selectedYear}.pdf`);
+    const fileName = selectedMonth === 0
+      ? `PnL_Report_${propertyName}_${selectedYear}.pdf`
+      : `PnL_Report_${propertyName}_${months[selectedMonth].label}_${selectedYear}.pdf`;
+
+    doc.save(fileName);
   };
 
   if (isLoading) {
@@ -320,6 +380,17 @@ export default function Reports() {
               </option>
             ))}
           </select>
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+            className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {months.map((month) => (
+              <option key={month.value} value={month.value}>
+                {month.label}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="flex gap-2">
           <button
@@ -337,6 +408,13 @@ export default function Reports() {
             Export PDF
           </button>
         </div>
+      </div>
+
+      {/* Period Badge */}
+      <div className="mb-4">
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+          {getReportPeriodLabel()}
+        </span>
       </div>
 
       {/* KPIs Summary */}
@@ -380,7 +458,9 @@ export default function Reports() {
 
       {/* Monthly P&L Table */}
       <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <h2 className="text-lg font-semibold mb-4">Monthly P&L Statement</h2>
+        <h2 className="text-lg font-semibold mb-4">
+          {selectedMonth === 0 ? 'Monthly P&L Statement' : 'P&L Statement'}
+        </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -393,22 +473,34 @@ export default function Reports() {
               </tr>
             </thead>
             <tbody>
-              {monthlyData.map((row, index) => (
-                <tr key={index} className="border-b hover:bg-gray-50">
-                  <td className="py-3 px-4 font-medium">{row.month}</td>
-                  <td className="text-right py-3 px-4">{formatCurrency(row.gross_revenue)}</td>
-                  <td className="text-right py-3 px-4">{formatCurrency(row.net_revenue)}</td>
-                  <td className="text-right py-3 px-4 text-red-600">{formatCurrency(row.expenses)}</td>
-                  <td className="text-right py-3 px-4 font-semibold">{formatCurrency(row.noi)}</td>
+              {monthlyData.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-gray-500">
+                    No data for this period
+                  </td>
                 </tr>
-              ))}
-              <tr className="bg-gray-100 font-bold">
-                <td className="py-3 px-4">TOTAL</td>
-                <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.gross_revenue), 0))}</td>
-                <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.net_revenue), 0))}</td>
-                <td className="text-right py-3 px-4 text-red-600">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.expenses), 0))}</td>
-                <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.noi), 0))}</td>
-              </tr>
+              ) : (
+                <>
+                  {monthlyData.map((row, index) => (
+                    <tr key={index} className="border-b hover:bg-gray-50">
+                      <td className="py-3 px-4 font-medium">{row.month}</td>
+                      <td className="text-right py-3 px-4">{formatCurrency(row.gross_revenue)}</td>
+                      <td className="text-right py-3 px-4">{formatCurrency(row.net_revenue)}</td>
+                      <td className="text-right py-3 px-4 text-red-600">{formatCurrency(row.expenses)}</td>
+                      <td className="text-right py-3 px-4 font-semibold">{formatCurrency(row.noi)}</td>
+                    </tr>
+                  ))}
+                  {monthlyData.length > 1 && (
+                    <tr className="bg-gray-100 font-bold">
+                      <td className="py-3 px-4">TOTAL</td>
+                      <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.gross_revenue), 0))}</td>
+                      <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.net_revenue), 0))}</td>
+                      <td className="text-right py-3 px-4 text-red-600">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.expenses), 0))}</td>
+                      <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.noi), 0))}</td>
+                    </tr>
+                  )}
+                </>
+              )}
             </tbody>
           </table>
         </div>
