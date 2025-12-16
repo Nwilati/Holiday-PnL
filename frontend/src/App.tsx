@@ -7,6 +7,7 @@ import Expenses from './pages/Expenses';
 import Properties from './pages/Properties';
 import Calendar from './pages/Calendar';
 import Login from './pages/Login';
+import Reports from './pages/Reports';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -75,6 +76,13 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <Properties />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/reports" element={
+        <ProtectedRoute>
+          <Layout>
+            <Reports />
           </Layout>
         </ProtectedRoute>
       } />
