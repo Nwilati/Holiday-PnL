@@ -10,8 +10,6 @@ import {
   Users,
   Calendar,
   Home,
-  Bell,
-  Search,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 

@@ -241,7 +241,7 @@ export default function Dashboard() {
               <YAxis axisLine={false} tickLine={false} tick={{ fill: '#78716c', fontSize: 12 }} tickFormatter={(v) => `${v / 1000}k`} />
               <Tooltip
                 contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e5e5', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                formatter={(value: number) => formatCurrency(value)}
+                formatter={(value) => formatCurrency(Number(value))}
               />
               <Area type="monotone" dataKey="gross_revenue" stroke="#10b981" strokeWidth={2} fill="url(#colorRevenue)" name="Revenue" />
               <Area type="monotone" dataKey="expenses" stroke="#f97316" strokeWidth={2} fill="url(#colorExpenses)" name="Expenses" />
@@ -258,20 +258,20 @@ export default function Dashboard() {
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie
-                data={channelMix}
+                data={channelMix.map(c => ({ name: c.channel_name, value: c.percentage }))}
                 cx="50%"
                 cy="50%"
                 innerRadius={50}
                 outerRadius={80}
                 paddingAngle={4}
-                dataKey="percentage"
-                nameKey="channel_name"
+                dataKey="value"
+                nameKey="name"
               >
                 {channelMix.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={getChannelColor(entry.channel_name)} />
+                  <Cell key={`cell-${index}`} fill={getChannelColor(channelMix[index]?.channel_name || '')} />
                 ))}
               </Pie>
-              <Tooltip formatter={(value: number) => `${value.toFixed(1)}%`} />
+              <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
             </PieChart>
           </ResponsiveContainer>
           <div className="grid grid-cols-2 gap-3 mt-4">
