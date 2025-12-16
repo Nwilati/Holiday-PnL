@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 from datetime import date
 from app.core.database import get_db
 from app.models.models import Expense, Property, ExpenseCategory
@@ -44,55 +45,91 @@ def create_expense(expense_data: ExpenseCreate, db: Session = Depends(get_db)):
     # Validate property exists
     property = db.query(Property).filter(Property.id == expense_data.property_id).first()
     if not property:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Property not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
 
     # Validate category exists
-    category = db.query(ExpenseCategory).filter(
-        ExpenseCategory.id == expense_data.category_id
-    ).first()
+    category = db.query(ExpenseCategory).filter(ExpenseCategory.id == expense_data.category_id).first()
     if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Category not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
 
-    expense = Expense(**expense_data.model_dump())
-    db.add(expense)
+    expense_dict = expense_data.model_dump()
+    expense_id = uuid4()
+
+    payment_method_val = expense_dict.get('payment_method') or None
+
+    sql = text("""
+        INSERT INTO expenses (
+            id, property_id, category_id, expense_date, vendor, description,
+            amount, vat_amount, cost_type, is_booking_linked, linked_booking_id,
+            payment_method, payment_date, payment_reference, is_paid,
+            receipt_url, receipt_filename, notes, is_reconciled, reconciled_at, created_by
+        ) VALUES (
+            :id, :property_id, :category_id, :expense_date, :vendor, :description,
+            :amount, :vat_amount, :cost_type, :is_booking_linked, :linked_booking_id,
+            CAST(:payment_method AS payment_method), :payment_date, :payment_reference, :is_paid,
+            :receipt_url, :receipt_filename, :notes, :is_reconciled, :reconciled_at, :created_by
+        )
+    """)
+
+    db.execute(sql, {
+        'id': expense_id,
+        'property_id': expense_dict.get('property_id'),
+        'category_id': expense_dict.get('category_id'),
+        'expense_date': expense_dict.get('expense_date'),
+        'vendor': expense_dict.get('vendor') or None,
+        'description': expense_dict.get('description'),
+        'amount': expense_dict.get('amount'),
+        'vat_amount': expense_dict.get('vat_amount', 0),
+        'cost_type': expense_dict.get('cost_type', 'variable'),
+        'is_booking_linked': expense_dict.get('is_booking_linked', False),
+        'linked_booking_id': expense_dict.get('linked_booking_id'),
+        'payment_method': payment_method_val,
+        'payment_date': expense_dict.get('payment_date'),
+        'payment_reference': expense_dict.get('payment_reference'),
+        'is_paid': expense_dict.get('is_paid', True),
+        'receipt_url': expense_dict.get('receipt_url'),
+        'receipt_filename': expense_dict.get('receipt_filename'),
+        'notes': expense_dict.get('notes'),
+        'is_reconciled': expense_dict.get('is_reconciled', False),
+        'reconciled_at': expense_dict.get('reconciled_at'),
+        'created_by': expense_dict.get('created_by'),
+    })
+
     db.commit()
-    db.refresh(expense)
+
+    expense = db.query(Expense).filter(Expense.id == expense_id).first()
     return expense
 
 @router.get("/{expense_id}", response_model=ExpenseResponse)
 def get_expense(expense_id: UUID, db: Session = Depends(get_db)):
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Expense not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
     return expense
 
 @router.put("/{expense_id}", response_model=ExpenseResponse)
-def update_expense(
-    expense_id: UUID,
-    expense_data: ExpenseUpdate,
-    db: Session = Depends(get_db)
-):
+def update_expense(expense_id: UUID, expense_data: ExpenseUpdate, db: Session = Depends(get_db)):
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Expense not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
 
     update_data = expense_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(expense, field, value)
 
-    db.commit()
+    set_clauses = []
+    params = {'id': expense_id}
+
+    for field, value in update_data.items():
+        if field == 'payment_method':
+            set_clauses.append(f"payment_method = CAST(:{field} AS payment_method)")
+        else:
+            set_clauses.append(f"{field} = :{field}")
+        params[field] = value if value != '' else None
+
+    if set_clauses:
+        sql = text(f"UPDATE expenses SET {', '.join(set_clauses)}, updated_at = NOW() WHERE id = :id")
+        db.execute(sql, params)
+        db.commit()
+
     db.refresh(expense)
     return expense
 
@@ -100,11 +137,7 @@ def update_expense(
 def delete_expense(expense_id: UUID, db: Session = Depends(get_db)):
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Expense not found"
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
     db.delete(expense)
     db.commit()
     return None
