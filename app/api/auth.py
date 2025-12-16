@@ -198,3 +198,14 @@ def delete_user(user_id: str, db: Session = Depends(get_db), admin: dict = Depen
 
     db.commit()
     return {"message": "User deleted"}
+
+@router.post("/reset-password-temp")
+def reset_password_temp(email: str, new_password: str, db: Session = Depends(get_db)):
+    """TEMPORARY - Remove after use"""
+    hashed_pw = hash_password(new_password)
+    db.execute(
+        text("UPDATE users SET password_hash = :hash WHERE email = :email"),
+        {"hash": hashed_pw, "email": email}
+    )
+    db.commit()
+    return {"message": "Password reset", "email": email}
