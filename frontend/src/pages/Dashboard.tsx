@@ -267,7 +267,7 @@ export default function Dashboard() {
                 dataKey="value"
                 nameKey="name"
               >
-                {channelMix.map((entry, index) => (
+                {channelMix.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={getChannelColor(channelMix[index]?.channel_name || '')} />
                 ))}
               </Pie>
