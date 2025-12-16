@@ -279,6 +279,8 @@ class ExpenseResponse(ExpenseBase):
     id: UUID
     total_amount: Optional[Decimal] = None
     is_reconciled: bool
+    receipt_filename: Optional[str] = None
+    receipt_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
