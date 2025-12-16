@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Plus, Building2 } from 'lucide-react';
 import { api } from '../api/client';
 import {
   format,
@@ -64,9 +65,12 @@ export default function Calendar() {
       setProperties(response.data);
       if (response.data.length > 0) {
         setSelectedProperty(response.data[0].id);
+      } else {
+        setIsLoading(false);
       }
     } catch (error) {
       console.error('Failed to load properties:', error);
+      setIsLoading(false);
     }
   };
 
@@ -218,7 +222,7 @@ export default function Calendar() {
                     }}
                     title={`${booking.guest_name} (${getChannelName(booking.channel_id)})`}
                   >
-                    {isCheckIn ? '’ ' : ''}{booking.guest_name}
+                    {isCheckIn ? 'ï¿½ ' : ''}{booking.guest_name}
                   </div>
                 );
               })}
@@ -327,6 +331,35 @@ export default function Calendar() {
       </div>
     );
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="w-12 h-12 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (properties.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96">
+        <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mb-6">
+          <Building2 className="w-10 h-10 text-orange-500" />
+        </div>
+        <h2 className="text-2xl font-bold text-stone-800 mb-2">No Properties Yet</h2>
+        <p className="text-stone-500 mb-6 text-center max-w-md">
+          Add a property first to view your booking calendar.
+        </p>
+        <Link
+          to="/properties"
+          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl font-medium shadow-lg shadow-orange-200 hover:shadow-xl transition-all duration-200"
+        >
+          <Plus className="w-5 h-5" />
+          Add Your First Property
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div>
