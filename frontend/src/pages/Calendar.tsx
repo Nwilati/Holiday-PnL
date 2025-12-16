@@ -1,0 +1,350 @@
+import { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { api } from '../api/client';
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  addDays,
+  addMonths,
+  subMonths,
+  isSameMonth,
+  isSameDay,
+  isWithinInterval,
+  parseISO
+} from 'date-fns';
+
+interface Booking {
+  id: string;
+  guest_name: string;
+  check_in: string;
+  check_out: string;
+  channel_id: string;
+  status: string;
+  nightly_rate: number;
+  property_id: string;
+}
+
+interface Channel {
+  id: string;
+  name: string;
+  color_hex: string;
+}
+
+interface Property {
+  id: string;
+  name: string;
+}
+
+export default function Calendar() {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [selectedProperty, setSelectedProperty] = useState<string>('');
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadProperties();
+    loadChannels();
+  }, []);
+
+  useEffect(() => {
+    if (selectedProperty) {
+      loadBookings();
+    }
+  }, [selectedProperty, currentMonth]);
+
+  const loadProperties = async () => {
+    try {
+      const response = await api.getProperties();
+      setProperties(response.data);
+      if (response.data.length > 0) {
+        setSelectedProperty(response.data[0].id);
+      }
+    } catch (error) {
+      console.error('Failed to load properties:', error);
+    }
+  };
+
+  const loadChannels = async () => {
+    try {
+      const response = await api.getChannels();
+      setChannels(response.data);
+    } catch (error) {
+      console.error('Failed to load channels:', error);
+    }
+  };
+
+  const loadBookings = async () => {
+    setIsLoading(true);
+    try {
+      const start = format(startOfMonth(subMonths(currentMonth, 1)), 'yyyy-MM-dd');
+      const end = format(endOfMonth(addMonths(currentMonth, 1)), 'yyyy-MM-dd');
+      const response = await api.getBookings({
+        property_id: selectedProperty,
+        start_date: start,
+        end_date: end
+      });
+      setBookings(response.data.filter((b: Booking) => b.status !== 'cancelled'));
+    } catch (error) {
+      console.error('Failed to load bookings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getChannelColor = (channelId: string) => {
+    const channel = channels.find(c => c.id === channelId);
+    return channel?.color_hex || '#6B7280';
+  };
+
+  const getChannelName = (channelId: string) => {
+    const channel = channels.find(c => c.id === channelId);
+    return channel?.name || 'Unknown';
+  };
+
+  const getBookingsForDay = (day: Date) => {
+    return bookings.filter(booking => {
+      const checkIn = parseISO(booking.check_in);
+      const checkOut = parseISO(booking.check_out);
+      return isWithinInterval(day, { start: checkIn, end: addDays(checkOut, -1) }) ||
+             isSameDay(day, checkIn);
+    });
+  };
+
+  const renderHeader = () => {
+    return (
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
+          <select
+            value={selectedProperty}
+            onChange={(e) => setSelectedProperty(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {properties.map((property) => (
+              <option key={property.id} value={property.id}>
+                {property.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <h2 className="text-lg font-semibold w-40 text-center">
+            {format(currentMonth, 'MMMM yyyy')}
+          </h2>
+          <button
+            onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setCurrentMonth(new Date())}
+            className="ml-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Today
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDays = () => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return (
+      <div className="grid grid-cols-7 mb-2">
+        {days.map((day) => (
+          <div key={day} className="py-2 text-center text-sm font-semibold text-gray-600">
+            {day}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderCells = () => {
+    const monthStart = startOfMonth(currentMonth);
+    const monthEnd = endOfMonth(monthStart);
+    const startDate = startOfWeek(monthStart);
+    const endDate = endOfWeek(monthEnd);
+
+    const rows = [];
+    let days = [];
+    let day = startDate;
+
+    while (day <= endDate) {
+      for (let i = 0; i < 7; i++) {
+        const currentDay = day;
+        const dayBookings = getBookingsForDay(currentDay);
+        const isCurrentMonth = isSameMonth(day, monthStart);
+        const isToday = isSameDay(day, new Date());
+
+        days.push(
+          <div
+            key={day.toString()}
+            className={`min-h-24 border border-gray-200 p-1 ${
+              !isCurrentMonth ? 'bg-gray-50' : 'bg-white'
+            }`}
+          >
+            <div className={`text-sm mb-1 ${
+              isToday
+                ? 'bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center'
+                : isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+            }`}>
+              {format(day, 'd')}
+            </div>
+            <div className="space-y-1">
+              {dayBookings.slice(0, 3).map((booking) => {
+                const isCheckIn = isSameDay(parseISO(booking.check_in), currentDay);
+                return (
+                  <div
+                    key={booking.id}
+                    onClick={() => setSelectedBooking(booking)}
+                    className="text-xs px-1 py-0.5 rounded cursor-pointer truncate hover:opacity-80"
+                    style={{
+                      backgroundColor: getChannelColor(booking.channel_id) + '20',
+                      borderLeft: `3px solid ${getChannelColor(booking.channel_id)}`
+                    }}
+                    title={`${booking.guest_name} (${getChannelName(booking.channel_id)})`}
+                  >
+                    {isCheckIn ? '’ ' : ''}{booking.guest_name}
+                  </div>
+                );
+              })}
+              {dayBookings.length > 3 && (
+                <div className="text-xs text-gray-500 px-1">
+                  +{dayBookings.length - 3} more
+                </div>
+              )}
+            </div>
+          </div>
+        );
+        day = addDays(day, 1);
+      }
+      rows.push(
+        <div key={day.toString()} className="grid grid-cols-7">
+          {days}
+        </div>
+      );
+      days = [];
+    }
+    return <div>{rows}</div>;
+  };
+
+  const renderLegend = () => {
+    return (
+      <div className="flex flex-wrap gap-4 mt-4">
+        {channels.map((channel) => (
+          <div key={channel.id} className="flex items-center gap-2">
+            <div
+              className="w-3 h-3 rounded"
+              style={{ backgroundColor: channel.color_hex }}
+            />
+            <span className="text-sm text-gray-600">{channel.name}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderBookingModal = () => {
+    if (!selectedBooking) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+          <div className="flex justify-between items-start mb-4">
+            <h3 className="text-lg font-semibold">Booking Details</h3>
+            <button
+              onClick={() => setSelectedBooking(null)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              
+            </button>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <span className="text-sm text-gray-500">Guest</span>
+              <p className="font-medium">{selectedBooking.guest_name}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-sm text-gray-500">Check-in</span>
+                <p className="font-medium">{format(parseISO(selectedBooking.check_in), 'MMM d, yyyy')}</p>
+              </div>
+              <div>
+                <span className="text-sm text-gray-500">Check-out</span>
+                <p className="font-medium">{format(parseISO(selectedBooking.check_out), 'MMM d, yyyy')}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-sm text-gray-500">Channel</span>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-3 h-3 rounded"
+                    style={{ backgroundColor: getChannelColor(selectedBooking.channel_id) }}
+                  />
+                  <p className="font-medium">{getChannelName(selectedBooking.channel_id)}</p>
+                </div>
+              </div>
+              <div>
+                <span className="text-sm text-gray-500">Status</span>
+                <p className="font-medium capitalize">{selectedBooking.status}</p>
+              </div>
+            </div>
+            <div>
+              <span className="text-sm text-gray-500">Nightly Rate</span>
+              <p className="font-medium">AED {selectedBooking.nightly_rate}</p>
+            </div>
+          </div>
+          <div className="mt-6 flex gap-3">
+            <a
+              href={`/bookings?edit=${selectedBooking.id}`}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-center hover:bg-blue-700"
+            >
+              Edit Booking
+            </a>
+            <button
+              onClick={() => setSelectedBooking(null)}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      {renderHeader()}
+      {isLoading ? (
+        <div className="flex items-center justify-center h-96">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      ) : (
+        <>
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            {renderDays()}
+            {renderCells()}
+          </div>
+          {renderLegend()}
+        </>
+      )}
+      {renderBookingModal()}
+    </div>
+  );
+}

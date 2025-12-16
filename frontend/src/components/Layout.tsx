@@ -7,7 +7,8 @@ import {
   Building2,
   Settings,
   LogOut,
-  User
+  User,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -20,6 +21,7 @@ export default function Layout({ children }: LayoutProps) {
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Calendar', href: '/calendar', icon: CalendarIcon },
     { name: 'Bookings', href: '/bookings', icon: CalendarDays },
     { name: 'Expenses', href: '/expenses', icon: Receipt },
     { name: 'Properties', href: '/properties', icon: Building2 },
