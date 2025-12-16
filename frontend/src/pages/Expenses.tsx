@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Plus, Upload, FileText, Trash2, Download } from 'lucide-react';
 import DataTable from '../components/DataTable';
 import { api } from '../api/client';
-// Types defined inline
+
 type Property = { id: string; name: string; };
 type Category = { id: string; code: string; name: string; category_type: string; };
 type Expense = {
@@ -17,6 +17,8 @@ type Expense = {
   total_amount: number;
   payment_method: string;
   is_paid: boolean;
+  receipt_filename?: string;
+  receipt_url?: string;
 };
 
 export default function Expenses() {
@@ -115,9 +117,18 @@ export default function Expenses() {
       ),
     },
     {
-      key: 'payment_method',
-      header: 'Payment',
-      render: (expense: Expense) => expense.payment_method || '-',
+      key: 'receipt',
+      header: 'Receipt',
+      render: (expense: Expense) => (
+        expense.receipt_filename ? (
+          <span className="inline-flex items-center text-green-600">
+            <FileText className="w-4 h-4 mr-1" />
+            Yes
+          </span>
+        ) : (
+          <span className="text-gray-400">-</span>
+        )
+      ),
     },
   ];
 
@@ -228,20 +239,80 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
     is_paid: expense?.is_paid ?? true,
   });
   const [saving, setSaving] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [currentReceipt, setCurrentReceipt] = useState(expense?.receipt_filename || null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const expenseCategories = categories.filter(c =>
     c.category_type === 'operating_expense' || c.category_type === 'capital'
   );
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File too large. Maximum size is 5MB.');
+        return;
+      }
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Invalid file type. Allowed: JPG, PNG, GIF, PDF');
+        return;
+      }
+      setReceiptFile(file);
+    }
+  };
+
+  const handleUploadReceipt = async (expenseId: string) => {
+    if (!receiptFile) return;
+
+    setUploadingReceipt(true);
+    try {
+      await api.uploadReceipt(expenseId, receiptFile);
+      setCurrentReceipt(receiptFile.name);
+      setReceiptFile(null);
+    } catch (error) {
+      console.error('Error uploading receipt:', error);
+      alert('Error uploading receipt');
+    }
+    setUploadingReceipt(false);
+  };
+
+  const handleDeleteReceipt = async () => {
+    if (!expense?.id) return;
+
+    if (!confirm('Delete this receipt?')) return;
+
+    try {
+      await api.deleteReceipt(expense.id);
+      setCurrentReceipt(null);
+    } catch (error) {
+      console.error('Error deleting receipt:', error);
+      alert('Error deleting receipt');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
+      let expenseId = expense?.id;
+
       if (expense) {
         await api.updateExpense(expense.id, formData);
       } else {
-        await api.createExpense(formData);
+        const response = await api.createExpense(formData);
+        expenseId = response.data.id;
       }
+
+      // Upload receipt if selected
+      if (receiptFile && expenseId) {
+        await handleUploadReceipt(expenseId);
+      }
+
       onSave();
     } catch (error) {
       console.error('Error saving expense:', error);
@@ -250,9 +321,11 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
     setSaving(false);
   };
 
+  const API_BASE_URL = 'https://holiday-pnl-production.up.railway.app/api/v1';
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b">
           <h2 className="text-xl font-bold">{expense ? 'Edit Expense' : 'New Expense'}</h2>
         </div>
@@ -350,11 +423,77 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
             >
               <option value="cash">Cash</option>
               <option value="credit_card">Credit Card</option>
-              <option value="debit_card">Debit Card</option>
               <option value="bank_transfer">Bank Transfer</option>
-              <option value="online_payment">Online Payment</option>
+              <option value="cheque">Cheque</option>
+              <option value="other">Other</option>
             </select>
           </div>
+
+          {/* Receipt Upload Section */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Receipt</label>
+
+            {/* Current Receipt */}
+            {currentReceipt && expense && (
+              <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg mb-2">
+                <div className="flex items-center">
+                  <FileText className="w-5 h-5 text-green-600 mr-2" />
+                  <span className="text-sm text-green-800">{currentReceipt}</span>
+                </div>
+                <div className="flex gap-2">
+                  <a
+                    href={`${API_BASE_URL}/receipts/${expense.id}/download`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1 text-blue-600 hover:bg-blue-100 rounded"
+                    title="View Receipt"
+                  >
+                    <Download className="w-4 h-4" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleDeleteReceipt}
+                    className="p-1 text-red-600 hover:bg-red-100 rounded"
+                    title="Delete Receipt"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* File Input */}
+            {!currentReceipt && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/jpeg,image/png,image/gif,application/pdf"
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {receiptFile ? receiptFile.name : 'Choose File'}
+                </button>
+                {receiptFile && (
+                  <button
+                    type="button"
+                    onClick={() => setReceiptFile(null)}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            )}
+            <p className="text-xs text-gray-500 mt-1">Max 5MB. JPG, PNG, GIF, or PDF</p>
+          </div>
+
           <div className="flex items-center">
             <input
               type="checkbox"
@@ -375,10 +514,10 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || uploadingReceipt}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
-              {saving ? 'Saving...' : 'Save Expense'}
+              {saving ? 'Saving...' : uploadingReceipt ? 'Uploading...' : 'Save Expense'}
             </button>
           </div>
         </form>
