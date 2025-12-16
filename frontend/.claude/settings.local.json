@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(echo.)"
+      "Bash(echo.)",
+      "Bash(del \"c:\\Users\\AbdulGhaniNwilati\\Desktop\\rental software\\frontend\\tailwind.config.js\")"
     ]
   }
 }
