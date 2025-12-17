@@ -20,13 +20,11 @@ import {
   ArrowDownRight,
   Building2,
   Plus,
-  FileText,
+  Banknote,
   AlertCircle,
-  Clock,
-  CheckCircle2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { api, UpcomingCheque } from '../api/client';
+import { api } from '../api/client';
 
 interface Property {
   id: string;
@@ -57,17 +55,20 @@ interface ChannelData {
   channel_name: string;
   revenue: number;
   percentage: number;
-  bookings: number;
 }
 
-const CHANNEL_COLORS: Record<string, string> = {
-  'Airbnb': '#FF5A5F',
-  'Booking.com': '#003580',
-  'VRBO': '#3D5A80',
-  'Direct': '#5C8A5C',
-  'Expedia': '#FFD700',
-  'Other': '#78716C',
-};
+interface UpcomingCheque {
+  id: string;
+  tenancy_id: string;
+  tenant_name: string;
+  cheque_number: string;
+  bank_name: string;
+  amount: number;
+  due_date: string;
+  days_until_due: number;
+}
+
+const CHANNEL_COLORS = ['#f97316', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#f59e0b'];
 
 export default function Dashboard() {
   const [properties, setProperties] = useState<Property[]>([]);
@@ -76,57 +77,65 @@ export default function Dashboard() {
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
   const [channelMix, setChannelMix] = useState<ChannelData[]>([]);
   const [upcomingCheques, setUpcomingCheques] = useState<UpcomingCheque[]>([]);
-  const [chequesTotalAmount, setChequesTotalAmount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   const currentYear = new Date().getFullYear();
 
   useEffect(() => {
-    const init = async () => {
-      try {
-        const response = await api.getProperties();
-        setProperties(response.data);
-        if (response.data.length > 0) {
-          setSelectedProperty(response.data[0].id);
-        } else {
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error('Failed to load properties:', error);
-        setIsLoading(false);
-      }
-    };
-    init();
+    loadProperties();
   }, []);
 
   useEffect(() => {
     if (selectedProperty) {
       loadDashboardData();
+      loadUpcomingCheques();
     }
   }, [selectedProperty]);
 
+  const loadProperties = async () => {
+    try {
+      const response = await api.getProperties();
+      setProperties(response.data);
+      if (response.data.length > 0) {
+        setSelectedProperty(response.data[0].id);
+      } else {
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error('Failed to load properties:', error);
+      setIsLoading(false);
+    }
+  };
+
   const loadDashboardData = async () => {
     setIsLoading(true);
-    const startDate = `${currentYear}-01-01`;
-    const endDate = `${currentYear}-12-31`;
-
     try {
-      const [kpiRes, trendRes, channelRes, chequesRes] = await Promise.all([
+      const startDate = `${currentYear}-01-01`;
+      const endDate = `${currentYear}-12-31`;
+
+      const [kpiRes, trendRes, channelRes] = await Promise.all([
         api.getKPIs(selectedProperty, startDate, endDate),
         api.getRevenueTrend(selectedProperty, currentYear),
         api.getChannelMix(selectedProperty, startDate, endDate),
-        api.getUpcomingCheques({ property_id: selectedProperty, days: 30 }),
       ]);
 
       setKpis(kpiRes.data);
-      setMonthlyData(trendRes.data);
-      setChannelMix(channelRes.data);
-      setUpcomingCheques(chequesRes.data.cheques || []);
-      setChequesTotalAmount(chequesRes.data.total_amount || 0);
+      setMonthlyData(trendRes.data || []);
+      setChannelMix(channelRes.data || []);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadUpcomingCheques = async () => {
+    try {
+      const response = await api.getUpcomingCheques({ property_id: selectedProperty, days: 30 });
+      setUpcomingCheques(response.data.cheques || []);
+    } catch (error) {
+      console.error('Failed to load upcoming cheques:', error);
+      setUpcomingCheques([]);
     }
   };
 
@@ -136,20 +145,23 @@ export default function Dashboard() {
       currency: 'AED',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(value);
+    }).format(value || 0);
   };
 
-  const getChannelColor = (channelName: string) => {
-    return CHANNEL_COLORS[channelName] || CHANNEL_COLORS['Other'];
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('en-AE', {
+      day: 'numeric',
+      month: 'short',
+    });
   };
 
   const getChequeUrgencyColor = (daysUntilDue: number) => {
-    if (daysUntilDue <= 3) return 'text-red-600 bg-red-50';
-    if (daysUntilDue <= 7) return 'text-orange-600 bg-orange-50';
-    return 'text-emerald-600 bg-emerald-50';
+    if (daysUntilDue <= 3) return 'bg-red-100 text-red-700 border-red-200';
+    if (daysUntilDue <= 7) return 'bg-orange-100 text-orange-700 border-orange-200';
+    return 'bg-blue-100 text-blue-700 border-blue-200';
   };
 
-  if (isLoading) {
+  if (isLoading && properties.length === 0) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="w-12 h-12 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
@@ -165,7 +177,7 @@ export default function Dashboard() {
         </div>
         <h2 className="text-2xl font-bold text-stone-800 mb-2">No Properties Yet</h2>
         <p className="text-stone-500 mb-6 text-center max-w-md">
-          Add a property first to view your dashboard analytics.
+          Add your first holiday home property to start tracking revenue and expenses.
         </p>
         <Link
           to="/properties"
@@ -178,278 +190,234 @@ export default function Dashboard() {
     );
   }
 
+  const kpiCards = [
+    {
+      label: 'Total Revenue',
+      value: formatCurrency(kpis?.total_revenue || 0),
+      icon: DollarSign,
+      color: 'bg-gradient-to-br from-emerald-400 to-emerald-600',
+      trend: 12.5,
+    },
+    {
+      label: 'Net Revenue',
+      value: formatCurrency(kpis?.net_revenue || 0),
+      icon: TrendingUp,
+      color: 'bg-gradient-to-br from-blue-400 to-blue-600',
+      trend: 8.3,
+    },
+    {
+      label: 'Total Expenses',
+      value: formatCurrency(kpis?.total_expenses || 0),
+      icon: Wallet,
+      color: 'bg-gradient-to-br from-rose-400 to-rose-600',
+      trend: -3.2,
+    },
+    {
+      label: 'NOI',
+      value: formatCurrency(kpis?.noi || 0),
+      icon: TrendingUp,
+      color: 'bg-gradient-to-br from-purple-400 to-purple-600',
+      trend: 15.7,
+    },
+    {
+      label: 'Occupancy',
+      value: `${Number(kpis?.occupancy_rate || 0).toFixed(1)}%`,
+      icon: Calendar,
+      color: 'bg-gradient-to-br from-amber-400 to-amber-600',
+      trend: 5.2,
+    },
+    {
+      label: 'ADR',
+      value: formatCurrency(kpis?.adr || 0),
+      icon: DollarSign,
+      color: 'bg-gradient-to-br from-teal-400 to-teal-600',
+      trend: 4.1,
+    },
+  ];
+
   return (
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-stone-800">Dashboard</h1>
-          <p className="text-stone-500 mt-1">Welcome back! Here's your property overview.</p>
+          <p className="text-stone-500 mt-1">Overview of your property performance</p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 bg-white border border-stone-200 rounded-xl px-4 py-2.5">
-            <Building2 className="w-5 h-5 text-stone-400" />
-            <select
-              value={selectedProperty}
-              onChange={(e) => setSelectedProperty(e.target.value)}
-              className="bg-transparent font-medium text-stone-700 focus:outline-none"
-            >
-              {properties.map((property) => (
-                <option key={property.id} value={property.id}>
-                  {property.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="flex items-center gap-2 bg-white rounded-xl px-4 py-2.5 shadow-sm border border-stone-100">
+          <Building2 className="w-5 h-5 text-stone-400" />
+          <select
+            value={selectedProperty}
+            onChange={(e) => setSelectedProperty(e.target.value)}
+            className="bg-transparent font-medium text-stone-700 focus:outline-none"
+          >
+            {properties.map((property) => (
+              <option key={property.id} value={property.id}>
+                {property.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <KPICard
-          title="Total Revenue"
-          value={formatCurrency(kpis?.total_revenue || 0)}
-          change="12.5%"
-          changeType="up"
-          icon={DollarSign}
-          iconBg="bg-emerald-100"
-          iconColor="text-emerald-600"
-        />
-        <KPICard
-          title="Net Income"
-          value={formatCurrency(kpis?.noi || 0)}
-          change="8.2%"
-          changeType="up"
-          icon={TrendingUp}
-          iconBg="bg-blue-100"
-          iconColor="text-blue-600"
-        />
-        <KPICard
-          title="Total Expenses"
-          value={formatCurrency(kpis?.total_expenses || 0)}
-          change="3.1%"
-          changeType="down"
-          icon={Wallet}
-          iconBg="bg-orange-100"
-          iconColor="text-orange-600"
-        />
-        <KPICard
-          title="Occupancy Rate"
-          value={`${Number(kpis?.occupancy_rate || 0).toFixed(1)}%`}
-          change="5.3%"
-          changeType="up"
-          icon={Calendar}
-          iconBg="bg-purple-100"
-          iconColor="text-purple-600"
-        />
-      </div>
-
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Revenue Chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="font-bold text-stone-800 text-lg">Revenue Overview</h3>
-              <p className="text-stone-500 text-sm">Monthly revenue and expenses</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-                <span className="text-sm text-stone-600">Revenue</span>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        {kpiCards.map((kpi, index) => (
+          <div
+            key={index}
+            className="bg-white rounded-2xl p-5 shadow-sm border border-stone-100 hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className={`p-2.5 rounded-xl ${kpi.color}`}>
+                <kpi.icon className="w-5 h-5 text-white" />
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-orange-400 rounded-full"></div>
-                <span className="text-sm text-stone-600">Expenses</span>
+              <div className={`flex items-center gap-1 text-xs font-medium ${kpi.trend >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {kpi.trend >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                {Math.abs(kpi.trend)}%
               </div>
             </div>
+            <p className="text-2xl font-bold text-stone-800">{kpi.value}</p>
+            <p className="text-sm text-stone-500 mt-1">{kpi.label}</p>
           </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={monthlyData}>
-              <defs>
-                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#78716c', fontSize: 12 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#78716c', fontSize: 12 }} tickFormatter={(v) => `${v / 1000}k`} />
-              <Tooltip
-                contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e5e5', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                formatter={(value) => formatCurrency(Number(value))}
-              />
-              <Area type="monotone" dataKey="gross_revenue" stroke="#10b981" strokeWidth={2} fill="url(#colorRevenue)" name="Revenue" />
-              <Area type="monotone" dataKey="expenses" stroke="#f97316" strokeWidth={2} fill="url(#colorExpenses)" name="Expenses" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Channel Mix */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
-          <div className="mb-6">
-            <h3 className="font-bold text-stone-800 text-lg">Channel Mix</h3>
-            <p className="text-stone-500 text-sm">Revenue by booking source</p>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={channelMix.map(c => ({ name: c.channel_name, value: c.percentage }))}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                paddingAngle={4}
-                dataKey="value"
-                nameKey="name"
-              >
-                {channelMix.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={getChannelColor(channelMix[index]?.channel_name || '')} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="grid grid-cols-2 gap-3 mt-4">
-            {channelMix.map((item) => (
-              <div key={item.channel_name} className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: getChannelColor(item.channel_name) }}></div>
-                <span className="text-sm text-stone-600 truncate">{item.channel_name}</span>
-                <span className="text-sm font-medium text-stone-800 ml-auto">{Number(item.percentage || 0).toFixed(0)}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        ))}
       </div>
 
       {/* Upcoming Cheques Widget */}
       {upcomingCheques.length > 0 && (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100 mb-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <FileText className="w-5 h-5 text-blue-600" />
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500">
+                <Banknote className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="font-bold text-stone-800 text-lg">Upcoming Cheques</h3>
-                <p className="text-stone-500 text-sm">Due within the next 30 days</p>
+                <h2 className="text-lg font-bold text-stone-800">Upcoming Cheques</h2>
+                <p className="text-sm text-stone-500">Due within 30 days</p>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-stone-800">{formatCurrency(chequesTotalAmount)}</p>
-              <p className="text-sm text-stone-500">{upcomingCheques.length} cheque{upcomingCheques.length !== 1 ? 's' : ''} pending</p>
-            </div>
+            <Link
+              to="/tenancies"
+              className="text-sm font-medium text-orange-600 hover:text-orange-700"
+            >
+              View All →
+            </Link>
           </div>
-
           <div className="space-y-3">
             {upcomingCheques.slice(0, 5).map((cheque) => (
               <div
                 key={cheque.id}
-                className="flex items-center justify-between p-4 bg-stone-50 rounded-xl hover:bg-stone-100 transition-colors"
+                className={`flex items-center justify-between p-4 rounded-xl border ${getChequeUrgencyColor(cheque.days_until_due)}`}
               >
                 <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getChequeUrgencyColor(cheque.days_until_due)}`}>
-                    {cheque.days_until_due <= 3 ? (
-                      <AlertCircle className="w-5 h-5" />
-                    ) : cheque.days_until_due <= 7 ? (
-                      <Clock className="w-5 h-5" />
-                    ) : (
-                      <CheckCircle2 className="w-5 h-5" />
-                    )}
-                  </div>
+                  <AlertCircle className="w-5 h-5" />
                   <div>
-                    <p className="font-medium text-stone-800">{cheque.tenant_name}</p>
-                    <p className="text-sm text-stone-500">
+                    <p className="font-medium">{cheque.tenant_name}</p>
+                    <p className="text-sm opacity-75">
                       {cheque.cheque_number} • {cheque.bank_name}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-stone-800">{formatCurrency(cheque.amount)}</p>
-                  <p className={`text-sm font-medium ${
-                    cheque.days_until_due <= 3 ? 'text-red-600' :
-                    cheque.days_until_due <= 7 ? 'text-orange-600' : 'text-stone-500'
-                  }`}>
-                    {cheque.days_until_due === 0 ? 'Due today' :
-                     cheque.days_until_due === 1 ? 'Due tomorrow' :
-                     `Due in ${cheque.days_until_due} days`}
+                  <p className="font-bold">{formatCurrency(cheque.amount)}</p>
+                  <p className="text-sm opacity-75">
+                    {formatDate(cheque.due_date)} ({cheque.days_until_due}d)
                   </p>
                 </div>
               </div>
             ))}
           </div>
-
-          {upcomingCheques.length > 5 && (
-            <Link
-              to="/tenancies"
-              className="mt-4 flex items-center justify-center gap-2 w-full py-3 text-orange-600 font-medium hover:bg-orange-50 rounded-xl transition-colors"
-            >
-              View all {upcomingCheques.length} cheques
-              <ArrowUpRight className="w-4 h-4" />
-            </Link>
-          )}
         </div>
       )}
 
-      {/* Bottom Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard title="ADR" value={formatCurrency(kpis?.adr || 0)} subtitle="Average Daily Rate" />
-        <StatCard title="RevPAR" value={formatCurrency(kpis?.revpar || 0)} subtitle="Revenue Per Available Room" />
-        <StatCard title="Total Bookings" value={kpis?.total_bookings?.toString() || '0'} subtitle={`${kpis?.total_nights || 0} nights`} />
-      </div>
-    </div>
-  );
-}
-
-// KPI Card Component
-interface KPICardProps {
-  title: string;
-  value: string;
-  change: string;
-  changeType: 'up' | 'down';
-  icon: React.ElementType;
-  iconBg: string;
-  iconColor: string;
-}
-
-function KPICard({ title, value, change, changeType, icon: Icon, iconBg, iconColor }: KPICardProps) {
-  return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100 hover:shadow-md transition-all duration-300">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-stone-500 text-sm font-medium mb-1">{title}</p>
-          <p className="text-2xl font-bold text-stone-800">{value}</p>
-          <div className={`flex items-center gap-1 mt-2 text-sm ${changeType === 'up' ? 'text-emerald-600' : 'text-rose-500'}`}>
-            {changeType === 'up' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-            <span className="font-medium">{change}</span>
-            <span className="text-stone-400">vs last month</span>
-          </div>
+      {/* Charts Grid */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Revenue Trend Chart */}
+        <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
+          <h2 className="text-lg font-bold text-stone-800 mb-6">Revenue Trend</h2>
+          {monthlyData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={monthlyData}>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
+                <XAxis dataKey="month" stroke="#78716c" fontSize={12} />
+                <YAxis stroke="#78716c" fontSize={12} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
+                <Tooltip
+                  formatter={(value: number) => [formatCurrency(value), '']}
+                  contentStyle={{ borderRadius: '12px', border: '1px solid #e7e5e4' }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="gross_revenue"
+                  stroke="#f97316"
+                  strokeWidth={3}
+                  fillOpacity={1}
+                  fill="url(#colorRevenue)"
+                  name="Revenue"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-stone-400">
+              No revenue data for this period
+            </div>
+          )}
         </div>
-        <div className={`w-12 h-12 ${iconBg} rounded-xl flex items-center justify-center`}>
-          <Icon className={`w-6 h-6 ${iconColor}`} />
+
+        {/* Channel Mix Donut */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
+          <h2 className="text-lg font-bold text-stone-800 mb-6">Channel Mix</h2>
+          {channelMix.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={channelMix}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="revenue"
+                    nameKey="channel_name"
+                  >
+                    {channelMix.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={CHANNEL_COLORS[index % CHANNEL_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number) => [formatCurrency(value), '']}
+                    contentStyle={{ borderRadius: '12px', border: '1px solid #e7e5e4' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-2 mt-4">
+                {channelMix.map((channel, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: CHANNEL_COLORS[index % CHANNEL_COLORS.length] }}
+                      />
+                      <span className="text-sm text-stone-600">{channel.channel_name}</span>
+                    </div>
+                    <span className="text-sm font-medium text-stone-800">
+                      {Number(channel.percentage || 0).toFixed(1)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="h-[200px] flex items-center justify-center text-stone-400">
+              No booking data
+            </div>
+          )}
         </div>
       </div>
-    </div>
-  );
-}
-
-// Stat Card Component
-interface StatCardProps {
-  title: string;
-  value: string;
-  subtitle: string;
-}
-
-function StatCard({ title, value, subtitle }: StatCardProps) {
-  return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
-      <p className="text-stone-500 text-sm font-medium mb-1">{title}</p>
-      <p className="text-2xl font-bold text-stone-800">{value}</p>
-      <p className="text-stone-400 text-sm mt-1">{subtitle}</p>
     </div>
   );
 }
