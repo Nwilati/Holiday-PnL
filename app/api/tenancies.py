@@ -13,7 +13,8 @@ from app.schemas.schemas import (
     TenancyChequeCreate, TenancyChequeUpdate, TenancyChequeResponse,
     TenancyDocumentCreate, TenancyDocumentResponse, TenancyDocumentWithData,
     TenancyTerminate, TenancyRenew,
-    UpcomingCheque, UpcomingChequesResponse
+    UpcomingCheque, UpcomingChequesResponse,
+    AnnualRevenueResponse
 )
 
 router = APIRouter(prefix="/tenancies", tags=["Tenancies"])
@@ -37,6 +38,8 @@ def calculate_cheque_schedule(
         months_interval = 12
     elif num_cheques == 2:
         months_interval = 6
+    elif num_cheques == 3:
+        months_interval = 4
     elif num_cheques == 4:
         months_interval = 3
     elif num_cheques == 6:
@@ -719,6 +722,137 @@ def bounce_cheque(
 
 
 # ============================================================================
+# DIRECT CHEQUE OPERATIONS (by cheque ID only)
+# ============================================================================
+
+@router.post("/cheques/{cheque_id}/deposit", response_model=TenancyChequeResponse)
+def deposit_cheque_direct(
+    cheque_id: UUID,
+    data: dict,
+    db: Session = Depends(get_db)
+):
+    """Mark a cheque as deposited (direct access by cheque ID)."""
+    cheque = db.query(TenancyCheque).filter(TenancyCheque.id == cheque_id).first()
+
+    if not cheque:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cheque not found")
+
+    if str(cheque.status) != 'pending':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only pending cheques can be deposited"
+        )
+
+    deposited_date = data.get('deposited_date', date.today().isoformat())
+
+    sql = text("""
+        UPDATE tenancy_cheques
+        SET status = CAST('deposited' AS cheque_status),
+            deposited_date = :deposited_date,
+            updated_at = NOW()
+        WHERE id = :id
+    """)
+    db.execute(sql, {'id': cheque_id, 'deposited_date': deposited_date})
+    db.commit()
+    db.refresh(cheque)
+    return cheque
+
+
+@router.post("/cheques/{cheque_id}/clear", response_model=TenancyChequeResponse)
+def clear_cheque_direct(
+    cheque_id: UUID,
+    data: dict,
+    db: Session = Depends(get_db)
+):
+    """Mark a cheque as cleared (direct access by cheque ID)."""
+    cheque = db.query(TenancyCheque).filter(TenancyCheque.id == cheque_id).first()
+
+    if not cheque:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cheque not found")
+
+    if str(cheque.status) != 'deposited':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only deposited cheques can be cleared"
+        )
+
+    cleared_date = data.get('cleared_date', date.today().isoformat())
+
+    sql = text("""
+        UPDATE tenancy_cheques
+        SET status = CAST('cleared' AS cheque_status),
+            cleared_date = :cleared_date,
+            updated_at = NOW()
+        WHERE id = :id
+    """)
+    db.execute(sql, {'id': cheque_id, 'cleared_date': cleared_date})
+    db.commit()
+    db.refresh(cheque)
+    return cheque
+
+
+@router.post("/cheques/{cheque_id}/bounce", response_model=TenancyChequeResponse)
+def bounce_cheque_direct(
+    cheque_id: UUID,
+    data: dict,
+    db: Session = Depends(get_db)
+):
+    """Mark a cheque as bounced (direct access by cheque ID)."""
+    cheque = db.query(TenancyCheque).filter(TenancyCheque.id == cheque_id).first()
+
+    if not cheque:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cheque not found")
+
+    if str(cheque.status) != 'deposited':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only deposited cheques can bounce"
+        )
+
+    bounce_reason = data.get('bounce_reason', 'Insufficient funds')
+
+    sql = text("""
+        UPDATE tenancy_cheques
+        SET status = CAST('bounced' AS cheque_status),
+            bounce_reason = :reason,
+            updated_at = NOW()
+        WHERE id = :id
+    """)
+    db.execute(sql, {'id': cheque_id, 'reason': bounce_reason})
+    db.commit()
+    db.refresh(cheque)
+    return cheque
+
+
+# ============================================================================
+# DIRECT DOCUMENT OPERATIONS (by document ID only)
+# ============================================================================
+
+@router.get("/documents/{document_id}", response_model=TenancyDocumentWithData)
+def get_document_direct(document_id: UUID, db: Session = Depends(get_db)):
+    """Get a specific document with file data (direct access by document ID)."""
+    document = db.query(TenancyDocument).filter(TenancyDocument.id == document_id).first()
+
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    return document
+
+
+@router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document_direct(document_id: UUID, db: Session = Depends(get_db)):
+    """Delete a document (direct access by document ID)."""
+    document = db.query(TenancyDocument).filter(TenancyDocument.id == document_id).first()
+
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    db.delete(document)
+    db.commit()
+    return None
+
+
+# ============================================================================
 # DOCUMENT MANAGEMENT ENDPOINTS
 # ============================================================================
 
@@ -857,77 +991,86 @@ def get_upcoming_cheques(
     )
 
 
-@router.get("/dashboard/annual-revenue")
+# ============================================================================
+# ANNUAL REVENUE ENDPOINT
+# ============================================================================
+
+@router.get("/dashboard/annual-revenue", response_model=AnnualRevenueResponse)
 def get_annual_revenue(
-    property_id: UUID,
-    start_date: date,
-    end_date: date,
+    property_id: Optional[UUID] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     db: Session = Depends(get_db)
 ):
-    """Get annual tenancy revenue summary for reports."""
+    """Get annual tenancy revenue summary."""
+
+    # Build property filter
+    property_filter = "AND t.property_id = :property_id" if property_id else ""
+
+    # Build date filter for contract overlap
+    date_filter = ""
+    if start_date and end_date:
+        date_filter = """
+            AND (
+                (t.contract_start <= :end_date AND t.contract_end >= :start_date)
+            )
+        """
+
     # Get cleared cheque amounts
-    cleared_sql = text("""
+    cleared_sql = text(f"""
         SELECT COALESCE(SUM(c.amount), 0) as total
         FROM tenancy_cheques c
         JOIN tenancies t ON c.tenancy_id = t.id
-        WHERE t.property_id = :property_id
-        AND c.status = 'cleared'
-        AND c.cleared_date BETWEEN :start_date AND :end_date
+        WHERE c.status = 'cleared'
+        {property_filter}
+        {date_filter}
     """)
-    total_cleared = db.execute(cleared_sql, {
-        'property_id': property_id,
-        'start_date': start_date,
-        'end_date': end_date
-    }).scalar() or Decimal('0')
 
-    # Get pending cheque amounts (due within the date range)
-    pending_sql = text("""
+    # Get pending cheque amounts
+    pending_sql = text(f"""
         SELECT COALESCE(SUM(c.amount), 0) as total
         FROM tenancy_cheques c
         JOIN tenancies t ON c.tenancy_id = t.id
-        WHERE t.property_id = :property_id
-        AND c.status IN ('pending', 'deposited')
-        AND c.due_date BETWEEN :start_date AND :end_date
+        WHERE c.status IN ('pending', 'deposited')
+        AND t.status = 'active'
+        {property_filter}
+        {date_filter}
     """)
-    total_pending = db.execute(pending_sql, {
-        'property_id': property_id,
-        'start_date': start_date,
-        'end_date': end_date
-    }).scalar() or Decimal('0')
 
-    # Get total contract value for active tenancies in the period
-    contract_sql = text("""
-        SELECT COALESCE(SUM(contract_value), 0) as total
-        FROM tenancies
-        WHERE property_id = :property_id
-        AND status = 'active'
-        AND contract_start <= :end_date
-        AND contract_end >= :start_date
+    # Get total contract value
+    contract_sql = text(f"""
+        SELECT COALESCE(SUM(t.contract_value), 0) as total
+        FROM tenancies t
+        WHERE t.status = 'active'
+        {property_filter}
+        {date_filter}
     """)
-    total_contract_value = db.execute(contract_sql, {
-        'property_id': property_id,
-        'start_date': start_date,
-        'end_date': end_date
-    }).scalar() or Decimal('0')
 
-    # Count active tenancies
-    count_sql = text("""
-        SELECT COUNT(*) as total
-        FROM tenancies
-        WHERE property_id = :property_id
-        AND status = 'active'
-        AND contract_start <= :end_date
-        AND contract_end >= :start_date
+    # Get active tenancy count
+    count_sql = text(f"""
+        SELECT COUNT(*) as count
+        FROM tenancies t
+        WHERE t.status = 'active'
+        {property_filter}
+        {date_filter}
     """)
-    active_tenancies = db.execute(count_sql, {
-        'property_id': property_id,
-        'start_date': start_date,
-        'end_date': end_date
-    }).scalar() or 0
 
-    return {
-        "total_cleared": float(total_cleared),
-        "total_pending": float(total_pending),
-        "total_contract_value": float(total_contract_value),
-        "active_tenancies": active_tenancies
-    }
+    params = {}
+    if property_id:
+        params['property_id'] = property_id
+    if start_date:
+        params['start_date'] = start_date
+    if end_date:
+        params['end_date'] = end_date
+
+    cleared = db.execute(cleared_sql, params).scalar() or Decimal('0')
+    pending = db.execute(pending_sql, params).scalar() or Decimal('0')
+    contract_value = db.execute(contract_sql, params).scalar() or Decimal('0')
+    active_count = db.execute(count_sql, params).scalar() or 0
+
+    return AnnualRevenueResponse(
+        total_cleared=cleared,
+        total_pending=pending,
+        total_contract_value=contract_value,
+        active_tenancies=active_count
+    )
