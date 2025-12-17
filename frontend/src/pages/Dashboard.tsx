@@ -16,12 +16,11 @@ import {
   TrendingUp,
   Calendar,
   Wallet,
-  ArrowUpRight,
-  ArrowDownRight,
   Building2,
   Plus,
   Banknote,
   AlertCircle,
+  Home,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
@@ -61,12 +60,20 @@ interface ChannelData {
 interface UpcomingCheque {
   id: string;
   tenancy_id: string;
+  property_name: string;
   tenant_name: string;
   cheque_number: string;
   bank_name: string;
   amount: number;
   due_date: string;
   days_until_due: number;
+}
+
+interface AnnualRevenue {
+  total_cleared: number;
+  total_pending: number;
+  total_contract_value: number;
+  active_tenancies: number;
 }
 
 const CHANNEL_COLORS = ['#f97316', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#f59e0b'];
@@ -78,6 +85,7 @@ export default function Dashboard() {
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
   const [channelMix, setChannelMix] = useState<ChannelData[]>([]);
   const [upcomingCheques, setUpcomingCheques] = useState<UpcomingCheque[]>([]);
+  const [annualRevenue, setAnnualRevenue] = useState<AnnualRevenue | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const currentYear = new Date().getFullYear();
@@ -87,21 +95,16 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (selectedProperty) {
-      loadDashboardData();
-      loadUpcomingCheques();
-    }
+    loadDashboardData();
+    loadUpcomingCheques();
+    loadAnnualRevenue();
   }, [selectedProperty]);
 
   const loadProperties = async () => {
     try {
       const response = await api.getProperties();
       setProperties(response.data);
-      if (response.data.length > 0) {
-        setSelectedProperty(response.data[0].id);
-      } else {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     } catch (error) {
       console.error('Failed to load properties:', error);
       setIsLoading(false);
@@ -114,15 +117,56 @@ export default function Dashboard() {
       const startDate = `${currentYear}-01-01`;
       const endDate = `${currentYear}-12-31`;
 
-      const [kpiRes, trendRes, channelRes] = await Promise.all([
-        api.getKPIs(selectedProperty, startDate, endDate),
-        api.getRevenueTrend(selectedProperty, currentYear),
-        api.getChannelMix(selectedProperty, startDate, endDate),
-      ]);
+      if (selectedProperty) {
+        const [kpiRes, trendRes, channelRes] = await Promise.all([
+          api.getKPIs(selectedProperty, startDate, endDate),
+          api.getRevenueTrend(selectedProperty, currentYear),
+          api.getChannelMix(selectedProperty, startDate, endDate),
+        ]);
 
-      setKpis(kpiRes.data);
-      setMonthlyData(trendRes.data || []);
-      setChannelMix(channelRes.data || []);
+        setKpis(kpiRes.data);
+        setMonthlyData(trendRes.data || []);
+        setChannelMix(channelRes.data || []);
+      } else {
+        // Load aggregate for all properties
+        const allKpis: KPIs = {
+          total_revenue: 0,
+          net_revenue: 0,
+          total_expenses: 0,
+          noi: 0,
+          occupancy_rate: 0,
+          adr: 0,
+          revpar: 0,
+          total_bookings: 0,
+          total_nights: 0,
+        };
+
+        for (const prop of properties) {
+          try {
+            const kpiRes = await api.getKPIs(prop.id, startDate, endDate);
+            const data = kpiRes.data;
+            allKpis.total_revenue += data.total_revenue || 0;
+            allKpis.net_revenue += data.net_revenue || 0;
+            allKpis.total_expenses += data.total_expenses || 0;
+            allKpis.noi += data.noi || 0;
+            allKpis.total_bookings += data.total_bookings || 0;
+            allKpis.total_nights += data.total_nights || 0;
+          } catch (e) {
+            console.error('Failed to load KPIs for property:', prop.id);
+          }
+        }
+
+        // Calculate averages for rate metrics
+        if (properties.length > 0) {
+          allKpis.occupancy_rate = allKpis.total_nights / (properties.length * 365) * 100;
+          allKpis.adr = allKpis.total_nights > 0 ? allKpis.total_revenue / allKpis.total_nights : 0;
+          allKpis.revpar = allKpis.adr * (allKpis.occupancy_rate / 100);
+        }
+
+        setKpis(allKpis);
+        setMonthlyData([]);
+        setChannelMix([]);
+      }
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
@@ -132,11 +176,34 @@ export default function Dashboard() {
 
   const loadUpcomingCheques = async () => {
     try {
-      const response = await api.getUpcomingCheques({ property_id: selectedProperty, days: 30 });
+      const params: { property_id?: string; days?: number } = { days: 30 };
+      if (selectedProperty) {
+        params.property_id = selectedProperty;
+      }
+      const response = await api.getUpcomingCheques(params);
       setUpcomingCheques(response.data.cheques || []);
     } catch (error) {
       console.error('Failed to load upcoming cheques:', error);
       setUpcomingCheques([]);
+    }
+  };
+
+  const loadAnnualRevenue = async () => {
+    try {
+      const startDate = `${currentYear}-01-01`;
+      const endDate = `${currentYear}-12-31`;
+      const params: { property_id?: string; start_date?: string; end_date?: string } = {
+        start_date: startDate,
+        end_date: endDate,
+      };
+      if (selectedProperty) {
+        params.property_id = selectedProperty;
+      }
+      const response = await api.getAnnualRevenue(params);
+      setAnnualRevenue(response.data);
+    } catch (error) {
+      console.error('Failed to load annual revenue:', error);
+      setAnnualRevenue(null);
     }
   };
 
@@ -160,6 +227,20 @@ export default function Dashboard() {
     if (daysUntilDue <= 3) return 'bg-red-100 text-red-700 border-red-200';
     if (daysUntilDue <= 7) return 'bg-orange-100 text-orange-700 border-orange-200';
     return 'bg-blue-100 text-blue-700 border-blue-200';
+  };
+
+  // Combined revenue (short-term + annual cleared)
+  const getCombinedRevenue = () => {
+    const shortTerm = kpis?.total_revenue || 0;
+    const annual = annualRevenue?.total_cleared || 0;
+    return shortTerm + annual;
+  };
+
+  // Combined NOI
+  const getCombinedNOI = () => {
+    const shortTermNOI = kpis?.noi || 0;
+    const annualCleared = annualRevenue?.total_cleared || 0;
+    return shortTermNOI + annualCleared;
   };
 
   if (isLoading && properties.length === 0) {
@@ -193,46 +274,40 @@ export default function Dashboard() {
 
   const kpiCards = [
     {
-      label: 'Total Revenue',
+      label: 'Short-Term Revenue',
       value: formatCurrency(kpis?.total_revenue || 0),
       icon: DollarSign,
       color: 'bg-gradient-to-br from-emerald-400 to-emerald-600',
-      trend: 12.5,
     },
     {
-      label: 'Net Revenue',
-      value: formatCurrency(kpis?.net_revenue || 0),
-      icon: TrendingUp,
+      label: 'Annual Tenancy (Cleared)',
+      value: formatCurrency(annualRevenue?.total_cleared || 0),
+      icon: Home,
       color: 'bg-gradient-to-br from-blue-400 to-blue-600',
-      trend: 8.3,
+    },
+    {
+      label: 'Combined Revenue',
+      value: formatCurrency(getCombinedRevenue()),
+      icon: TrendingUp,
+      color: 'bg-gradient-to-br from-purple-400 to-purple-600',
     },
     {
       label: 'Total Expenses',
       value: formatCurrency(kpis?.total_expenses || 0),
       icon: Wallet,
       color: 'bg-gradient-to-br from-rose-400 to-rose-600',
-      trend: -3.2,
     },
     {
-      label: 'NOI',
-      value: formatCurrency(kpis?.noi || 0),
+      label: 'Combined NOI',
+      value: formatCurrency(getCombinedNOI()),
       icon: TrendingUp,
-      color: 'bg-gradient-to-br from-purple-400 to-purple-600',
-      trend: 15.7,
+      color: 'bg-gradient-to-br from-teal-400 to-teal-600',
     },
     {
-      label: 'Occupancy',
-      value: `${Number(kpis?.occupancy_rate || 0).toFixed(1)}%`,
+      label: 'Active Tenancies',
+      value: String(annualRevenue?.active_tenancies || 0),
       icon: Calendar,
       color: 'bg-gradient-to-br from-amber-400 to-amber-600',
-      trend: 5.2,
-    },
-    {
-      label: 'ADR',
-      value: formatCurrency(kpis?.adr || 0),
-      icon: DollarSign,
-      color: 'bg-gradient-to-br from-teal-400 to-teal-600',
-      trend: 4.1,
     },
   ];
 
@@ -251,6 +326,7 @@ export default function Dashboard() {
             onChange={(e) => setSelectedProperty(e.target.value)}
             className="bg-transparent font-medium text-stone-700 focus:outline-none"
           >
+            <option value="">All Properties</option>
             {properties.map((property) => (
               <option key={property.id} value={property.id}>
                 {property.name}
@@ -271,16 +347,45 @@ export default function Dashboard() {
               <div className={`p-2.5 rounded-xl ${kpi.color}`}>
                 <kpi.icon className="w-5 h-5 text-white" />
               </div>
-              <div className={`flex items-center gap-1 text-xs font-medium ${kpi.trend >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {kpi.trend >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                {Math.abs(kpi.trend)}%
-              </div>
             </div>
             <p className="text-2xl font-bold text-stone-800">{kpi.value}</p>
             <p className="text-sm text-stone-500 mt-1">{kpi.label}</p>
           </div>
         ))}
       </div>
+
+      {/* Annual Tenancy Summary */}
+      {annualRevenue && (annualRevenue.total_cleared > 0 || annualRevenue.total_pending > 0 || annualRevenue.active_tenancies > 0) && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100 mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600">
+              <Home className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-stone-800">Annual Tenancy Summary</h2>
+              <p className="text-sm text-stone-500">{currentYear} Year to Date</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 bg-emerald-50 rounded-xl">
+              <p className="text-sm text-emerald-600 font-medium">Cleared Cheques</p>
+              <p className="text-xl font-bold text-emerald-700">{formatCurrency(annualRevenue.total_cleared)}</p>
+            </div>
+            <div className="p-4 bg-amber-50 rounded-xl">
+              <p className="text-sm text-amber-600 font-medium">Pending Cheques</p>
+              <p className="text-xl font-bold text-amber-700">{formatCurrency(annualRevenue.total_pending)}</p>
+            </div>
+            <div className="p-4 bg-blue-50 rounded-xl">
+              <p className="text-sm text-blue-600 font-medium">Total Contract Value</p>
+              <p className="text-xl font-bold text-blue-700">{formatCurrency(annualRevenue.total_contract_value)}</p>
+            </div>
+            <div className="p-4 bg-purple-50 rounded-xl">
+              <p className="text-sm text-purple-600 font-medium">Active Tenancies</p>
+              <p className="text-xl font-bold text-purple-700">{annualRevenue.active_tenancies}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upcoming Cheques Widget */}
       {upcomingCheques.length > 0 && (
@@ -313,7 +418,7 @@ export default function Dashboard() {
                   <div>
                     <p className="font-medium">{cheque.tenant_name}</p>
                     <p className="text-sm opacity-75">
-                      {cheque.cheque_number} • {cheque.bank_name}
+                      {cheque.property_name} • {cheque.cheque_number} • {cheque.bank_name}
                     </p>
                   </div>
                 </div>
@@ -330,95 +435,97 @@ export default function Dashboard() {
       )}
 
       {/* Charts Grid */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Revenue Trend Chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
-          <h2 className="text-lg font-bold text-stone-800 mb-6">Revenue Trend</h2>
-          {monthlyData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={monthlyData}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-                <XAxis dataKey="month" stroke="#78716c" fontSize={12} />
-                <YAxis stroke="#78716c" fontSize={12} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
-                <Tooltip
-                  formatter={(value) => [formatCurrency(Number(value) || 0), 'Revenue']}
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #e7e5e4' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="gross_revenue"
-                  stroke="#f97316"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorRevenue)"
-                  name="Revenue"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[300px] flex items-center justify-center text-stone-400">
-              No revenue data for this period
-            </div>
-          )}
-        </div>
-
-        {/* Channel Mix Donut */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
-          <h2 className="text-lg font-bold text-stone-800 mb-6">Channel Mix</h2>
-          {channelMix.length > 0 ? (
-            <>
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie
-                    data={channelMix as any[]}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="revenue"
-                    nameKey="channel_name"
-                  >
-                    {channelMix.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={CHANNEL_COLORS[index % CHANNEL_COLORS.length]} />
-                    ))}
-                  </Pie>
+      {selectedProperty && (
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Revenue Trend Chart */}
+          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
+            <h2 className="text-lg font-bold text-stone-800 mb-6">Revenue Trend</h2>
+            {monthlyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={monthlyData}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
+                  <XAxis dataKey="month" stroke="#78716c" fontSize={12} />
+                  <YAxis stroke="#78716c" fontSize={12} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
                   <Tooltip
                     formatter={(value) => [formatCurrency(Number(value) || 0), 'Revenue']}
                     contentStyle={{ borderRadius: '12px', border: '1px solid #e7e5e4' }}
                   />
-                </PieChart>
+                  <Area
+                    type="monotone"
+                    dataKey="gross_revenue"
+                    stroke="#f97316"
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill="url(#colorRevenue)"
+                    name="Revenue"
+                  />
+                </AreaChart>
               </ResponsiveContainer>
-              <div className="space-y-2 mt-4">
-                {channelMix.map((channel, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: CHANNEL_COLORS[index % CHANNEL_COLORS.length] }}
-                      />
-                      <span className="text-sm text-stone-600">{channel.channel_name}</span>
-                    </div>
-                    <span className="text-sm font-medium text-stone-800">
-                      {Number(channel.percentage || 0).toFixed(1)}%
-                    </span>
-                  </div>
-                ))}
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-stone-400">
+                No revenue data for this period
               </div>
-            </>
-          ) : (
-            <div className="h-[200px] flex items-center justify-center text-stone-400">
-              No booking data
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* Channel Mix Donut */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
+            <h2 className="text-lg font-bold text-stone-800 mb-6">Channel Mix</h2>
+            {channelMix.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={channelMix as any[]}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="revenue"
+                      nameKey="channel_name"
+                    >
+                      {channelMix.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CHANNEL_COLORS[index % CHANNEL_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => [formatCurrency(Number(value) || 0), 'Revenue']}
+                      contentStyle={{ borderRadius: '12px', border: '1px solid #e7e5e4' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-2 mt-4">
+                  {channelMix.map((channel, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: CHANNEL_COLORS[index % CHANNEL_COLORS.length] }}
+                        />
+                        <span className="text-sm text-stone-600">{channel.channel_name}</span>
+                      </div>
+                      <span className="text-sm font-medium text-stone-800">
+                        {Number(channel.percentage || 0).toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-stone-400">
+                No booking data
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

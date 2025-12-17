@@ -66,6 +66,7 @@ interface Tenancy {
   updated_at: string;
   cheques?: Cheque[];
   documents?: Document[];
+  property_name?: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -131,7 +132,6 @@ export default function Tenancies() {
     contract_start: '',
     contract_end: '',
     annual_rent: 0,
-    contract_value: 0,
     num_cheques: 1,
   });
 
@@ -150,20 +150,14 @@ export default function Tenancies() {
   }, []);
 
   useEffect(() => {
-    if (selectedProperty) {
-      loadTenancies();
-    }
+    loadTenancies();
   }, [selectedProperty, statusFilter]);
 
   const loadProperties = async () => {
     try {
       const response = await api.getProperties();
       setProperties(response.data);
-      if (response.data.length > 0) {
-        setSelectedProperty(response.data[0].id);
-      } else {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     } catch (error) {
       console.error('Failed to load properties:', error);
       setIsLoading(false);
@@ -275,7 +269,7 @@ export default function Tenancies() {
         annual_rent: Number(formData.annual_rent),
         contract_value: Number(formData.contract_value),
         security_deposit: Number(formData.security_deposit),
-        num_cheques: Number(formData.num_cheques) as 1 | 2 | 4 | 6 | 12,
+        num_cheques: Number(formData.num_cheques) as 1 | 2 | 3 | 4 | 6 | 12,
       };
 
       if (selectedTenancy) {
@@ -304,7 +298,6 @@ export default function Tenancies() {
       contract_start: newStart.toISOString().split('T')[0],
       contract_end: newEnd.toISOString().split('T')[0],
       annual_rent: tenancy.annual_rent,
-      contract_value: tenancy.contract_value,
       num_cheques: tenancy.num_cheques,
     });
     setShowRenewalModal(true);
@@ -317,8 +310,8 @@ export default function Tenancies() {
       await api.renewTenancy(selectedTenancy.id, {
         ...renewalData,
         annual_rent: Number(renewalData.annual_rent),
-        contract_value: Number(renewalData.contract_value),
-        num_cheques: Number(renewalData.num_cheques) as 1 | 2 | 4 | 6 | 12,
+        contract_value: Number(renewalData.annual_rent),
+        num_cheques: Number(renewalData.num_cheques) as 1 | 2 | 3 | 4 | 6 | 12,
       });
       setShowRenewalModal(false);
       loadTenancies();
@@ -370,36 +363,39 @@ export default function Tenancies() {
 
   // Cheque operations
   const handleDepositCheque = async (chequeId: string) => {
-    if (!selectedTenancy) return;
     try {
-      await api.depositCheque(selectedTenancy.id, chequeId);
-      const response = await api.getTenancy(selectedTenancy.id);
-      setSelectedTenancy(response.data as any);
+      await api.depositCheque(chequeId, { deposited_date: new Date().toISOString().split('T')[0] });
+      if (selectedTenancy) {
+        const response = await api.getTenancy(selectedTenancy.id);
+        setSelectedTenancy(response.data as any);
+      }
     } catch (error) {
       console.error('Failed to deposit cheque:', error);
     }
   };
 
   const handleClearCheque = async (chequeId: string) => {
-    if (!selectedTenancy) return;
     try {
-      await api.clearCheque(selectedTenancy.id, chequeId);
-      const response = await api.getTenancy(selectedTenancy.id);
-      setSelectedTenancy(response.data as any);
+      await api.clearCheque(chequeId, { cleared_date: new Date().toISOString().split('T')[0] });
+      if (selectedTenancy) {
+        const response = await api.getTenancy(selectedTenancy.id);
+        setSelectedTenancy(response.data as any);
+      }
     } catch (error) {
       console.error('Failed to clear cheque:', error);
     }
   };
 
   const handleBounceCheque = async (chequeId: string) => {
-    if (!selectedTenancy) return;
     const reason = prompt('Enter bounce reason:');
     if (!reason) return;
 
     try {
-      await api.bounceCheque(selectedTenancy.id, chequeId, reason);
-      const response = await api.getTenancy(selectedTenancy.id);
-      setSelectedTenancy(response.data as any);
+      await api.bounceCheque(chequeId, { bounce_reason: reason });
+      if (selectedTenancy) {
+        const response = await api.getTenancy(selectedTenancy.id);
+        setSelectedTenancy(response.data as any);
+      }
     } catch (error) {
       console.error('Failed to mark cheque as bounced:', error);
     }
@@ -436,9 +432,8 @@ export default function Tenancies() {
   };
 
   const handleDownloadDocument = async (docId: string, filename: string) => {
-    if (!selectedTenancy) return;
     try {
-      const response = await api.getTenancyDocument(selectedTenancy.id, docId);
+      const response = await api.getDocument(docId);
       const doc = response.data;
 
       const link = document.createElement('a');
@@ -451,13 +446,14 @@ export default function Tenancies() {
   };
 
   const handleDeleteDocument = async (docId: string) => {
-    if (!selectedTenancy) return;
     if (!confirm('Delete this document?')) return;
 
     try {
-      await api.deleteTenancyDocument(selectedTenancy.id, docId);
-      const response = await api.getTenancy(selectedTenancy.id);
-      setSelectedTenancy(response.data as any);
+      await api.deleteDocument(docId);
+      if (selectedTenancy) {
+        const response = await api.getTenancy(selectedTenancy.id);
+        setSelectedTenancy(response.data as any);
+      }
     } catch (error) {
       console.error('Failed to delete document:', error);
     }
@@ -512,6 +508,7 @@ export default function Tenancies() {
               onChange={(e) => setSelectedProperty(e.target.value)}
               className="flex-1 bg-transparent font-medium text-stone-700 focus:outline-none"
             >
+              <option value="">All Properties</option>
               {properties.map((property) => (
                 <option key={property.id} value={property.id}>
                   {property.name}
@@ -574,6 +571,9 @@ export default function Tenancies() {
                       {tenancy.status.charAt(0).toUpperCase() + tenancy.status.slice(1)}
                     </span>
                   </div>
+                  {!selectedProperty && tenancy.property_name && (
+                    <p className="text-sm text-orange-600 font-medium mb-2">{tenancy.property_name}</p>
+                  )}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
                       <p className="text-stone-500">Contract Period</p>
@@ -760,6 +760,7 @@ export default function Tenancies() {
                   >
                     <option value={1}>1 Cheque</option>
                     <option value={2}>2 Cheques</option>
+                    <option value={3}>3 Cheques</option>
                     <option value={4}>4 Cheques</option>
                     <option value={6}>6 Cheques</option>
                     <option value={12}>12 Cheques</option>
@@ -1028,25 +1029,14 @@ export default function Tenancies() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">Annual Rent (AED)</label>
-                  <input
-                    type="number"
-                    value={renewalData.annual_rent}
-                    onChange={(e) => setRenewalData({ ...renewalData, annual_rent: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-stone-200 rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">Contract Value (AED)</label>
-                  <input
-                    type="number"
-                    value={renewalData.contract_value}
-                    onChange={(e) => setRenewalData({ ...renewalData, contract_value: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-stone-200 rounded-lg"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">New Annual Rent (AED)</label>
+                <input
+                  type="number"
+                  value={renewalData.annual_rent}
+                  onChange={(e) => setRenewalData({ ...renewalData, annual_rent: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-stone-200 rounded-lg"
+                />
               </div>
 
               <div>
@@ -1058,6 +1048,7 @@ export default function Tenancies() {
                 >
                   <option value={1}>1 Cheque</option>
                   <option value={2}>2 Cheques</option>
+                  <option value={3}>3 Cheques</option>
                   <option value={4}>4 Cheques</option>
                   <option value={6}>6 Cheques</option>
                   <option value={12}>12 Cheques</option>
