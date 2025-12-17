@@ -20,9 +20,13 @@ import {
   ArrowDownRight,
   Building2,
   Plus,
+  FileText,
+  AlertCircle,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, UpcomingCheque } from '../api/client';
 
 interface Property {
   id: string;
@@ -71,6 +75,8 @@ export default function Dashboard() {
   const [kpis, setKpis] = useState<KPIs | null>(null);
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
   const [channelMix, setChannelMix] = useState<ChannelData[]>([]);
+  const [upcomingCheques, setUpcomingCheques] = useState<UpcomingCheque[]>([]);
+  const [chequesTotalAmount, setChequesTotalAmount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   const currentYear = new Date().getFullYear();
@@ -105,15 +111,18 @@ export default function Dashboard() {
     const endDate = `${currentYear}-12-31`;
 
     try {
-      const [kpiRes, trendRes, channelRes] = await Promise.all([
+      const [kpiRes, trendRes, channelRes, chequesRes] = await Promise.all([
         api.getKPIs(selectedProperty, startDate, endDate),
         api.getRevenueTrend(selectedProperty, currentYear),
         api.getChannelMix(selectedProperty, startDate, endDate),
+        api.getUpcomingCheques({ property_id: selectedProperty, days: 30 }),
       ]);
 
       setKpis(kpiRes.data);
       setMonthlyData(trendRes.data);
       setChannelMix(channelRes.data);
+      setUpcomingCheques(chequesRes.data.cheques || []);
+      setChequesTotalAmount(chequesRes.data.total_amount || 0);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
@@ -132,6 +141,12 @@ export default function Dashboard() {
 
   const getChannelColor = (channelName: string) => {
     return CHANNEL_COLORS[channelName] || CHANNEL_COLORS['Other'];
+  };
+
+  const getChequeUrgencyColor = (daysUntilDue: number) => {
+    if (daysUntilDue <= 3) return 'text-red-600 bg-red-50';
+    if (daysUntilDue <= 7) return 'text-orange-600 bg-orange-50';
+    return 'text-emerald-600 bg-emerald-50';
   };
 
   if (isLoading) {
@@ -310,6 +325,75 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Upcoming Cheques Widget */}
+      {upcomingCheques.length > 0 && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100 mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                <FileText className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-stone-800 text-lg">Upcoming Cheques</h3>
+                <p className="text-stone-500 text-sm">Due within the next 30 days</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold text-stone-800">{formatCurrency(chequesTotalAmount)}</p>
+              <p className="text-sm text-stone-500">{upcomingCheques.length} cheque{upcomingCheques.length !== 1 ? 's' : ''} pending</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {upcomingCheques.slice(0, 5).map((cheque) => (
+              <div
+                key={cheque.id}
+                className="flex items-center justify-between p-4 bg-stone-50 rounded-xl hover:bg-stone-100 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getChequeUrgencyColor(cheque.days_until_due)}`}>
+                    {cheque.days_until_due <= 3 ? (
+                      <AlertCircle className="w-5 h-5" />
+                    ) : cheque.days_until_due <= 7 ? (
+                      <Clock className="w-5 h-5" />
+                    ) : (
+                      <CheckCircle2 className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-medium text-stone-800">{cheque.tenant_name}</p>
+                    <p className="text-sm text-stone-500">
+                      {cheque.cheque_number} • {cheque.bank_name}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-stone-800">{formatCurrency(cheque.amount)}</p>
+                  <p className={`text-sm font-medium ${
+                    cheque.days_until_due <= 3 ? 'text-red-600' :
+                    cheque.days_until_due <= 7 ? 'text-orange-600' : 'text-stone-500'
+                  }`}>
+                    {cheque.days_until_due === 0 ? 'Due today' :
+                     cheque.days_until_due === 1 ? 'Due tomorrow' :
+                     `Due in ${cheque.days_until_due} days`}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {upcomingCheques.length > 5 && (
+            <Link
+              to="/tenancies"
+              className="mt-4 flex items-center justify-center gap-2 w-full py-3 text-orange-600 font-medium hover:bg-orange-50 rounded-xl transition-colors"
+            >
+              View all {upcomingCheques.length} cheques
+              <ArrowUpRight className="w-4 h-4" />
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Bottom Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

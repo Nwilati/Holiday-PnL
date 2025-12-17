@@ -47,6 +47,13 @@ interface ChannelPerformance {
   percentage: number;
 }
 
+interface AnnualRevenue {
+  total_cleared: number;
+  total_pending: number;
+  total_contract_value: number;
+  active_tenancies: number;
+}
+
 // Helper to safely convert to number
 const toNum = (val: any): number => {
   if (val === null || val === undefined) return 0;
@@ -79,9 +86,10 @@ export default function Reports() {
   const [monthlyData, setMonthlyData] = useState<MonthlyRevenue[]>([]);
   const [expenseBreakdown, setExpenseBreakdown] = useState<ExpenseBreakdown[]>([]);
   const [channelMix, setChannelMix] = useState<ChannelPerformance[]>([]);
+  const [annualRevenue, setAnnualRevenue] = useState<AnnualRevenue | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [propertyName, setPropertyName] = useState('');
-  const [reportType, setReportType] = useState<'full' | 'expenses' | 'revenue'>('full');
+  const [reportType, setReportType] = useState<'full' | 'expenses' | 'revenue' | 'tenancy'>('full');
 
   const years = [2023, 2024, 2025, 2026, 2027];
 
@@ -145,11 +153,12 @@ export default function Reports() {
     if (property) setPropertyName(property.name);
 
     try {
-      const [kpiRes, trendRes, expenseRes, channelRes] = await Promise.all([
+      const [kpiRes, trendRes, expenseRes, channelRes, annualRes] = await Promise.all([
         api.getKPIs(selectedProperty, startDate, endDate),
         api.getRevenueTrend(selectedProperty, selectedYear),
         api.getExpenseBreakdown(selectedProperty, startDate, endDate),
         api.getChannelMix(selectedProperty, startDate, endDate),
+        api.getAnnualRevenue({ property_id: selectedProperty, start_date: startDate, end_date: endDate }).catch(() => ({ data: null })),
       ]);
 
       setKpis(kpiRes.data);
@@ -164,6 +173,7 @@ export default function Reports() {
 
       setExpenseBreakdown(expenseRes.data || []);
       setChannelMix(channelRes.data || []);
+      setAnnualRevenue(annualRes.data);
     } catch (error) {
       console.error('Failed to load report data:', error);
     } finally {
@@ -180,9 +190,44 @@ export default function Reports() {
     }).format(toNum(value));
   };
 
+  // Calculate combined totals
+  const getCombinedRevenue = () => {
+    const shortTerm = toNum(kpis?.total_revenue);
+    const annual = toNum(annualRevenue?.total_cleared);
+    return shortTerm + annual;
+  };
+
+  const getCombinedNOI = () => {
+    const shortTermNOI = toNum(kpis?.noi);
+    const annualCleared = toNum(annualRevenue?.total_cleared);
+    return shortTermNOI + annualCleared;
+  };
+
   const exportToExcel = () => {
     const wb = XLSX.utils.book_new();
     const periodLabel = getReportPeriodLabel();
+
+    if (reportType === 'tenancy') {
+      // Tenancy Only Report
+      const summaryData = [
+        ['Annual Tenancy Report - ' + propertyName],
+        ['Period: ' + periodLabel],
+        ['Generated: ' + format(new Date(), 'MMM d, yyyy')],
+        [],
+        ['TENANCY REVENUE'],
+        ['Metric', 'Value'],
+        ['Cleared Cheques', formatCurrency(annualRevenue?.total_cleared)],
+        ['Pending Cheques', formatCurrency(annualRevenue?.total_pending)],
+        ['Total Contract Value', formatCurrency(annualRevenue?.total_contract_value)],
+        ['Active Tenancies', annualRevenue?.active_tenancies || 0],
+      ];
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+
+      saveAs(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })]),
+        `Tenancy_Report_${propertyName}_${selectedYear}.xlsx`);
+      return;
+    }
 
     if (reportType === 'expenses') {
       // Expenses Only Report
@@ -218,6 +263,7 @@ export default function Reports() {
         ['Period: ' + periodLabel],
         ['Generated: ' + format(new Date(), 'MMM d, yyyy')],
         [],
+        ['SHORT-TERM REVENUE'],
         ['Total Revenue', formatCurrency(kpis?.total_revenue)],
         ['Net Revenue', formatCurrency(kpis?.net_revenue)],
         ['Total Bookings', kpis?.total_bookings || 0],
@@ -225,6 +271,13 @@ export default function Reports() {
         ['Occupancy Rate', `${toNum(kpis?.occupancy_rate).toFixed(1)}%`],
         ['ADR', formatCurrency(kpis?.adr)],
         ['RevPAR', formatCurrency(kpis?.revpar)],
+        [],
+        ['ANNUAL TENANCY REVENUE'],
+        ['Cleared Cheques', formatCurrency(annualRevenue?.total_cleared)],
+        ['Pending Cheques', formatCurrency(annualRevenue?.total_pending)],
+        [],
+        ['COMBINED TOTAL'],
+        ['Total Revenue', formatCurrency(getCombinedRevenue())],
       ];
       const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
@@ -254,15 +307,19 @@ export default function Reports() {
       [],
       ['KEY PERFORMANCE INDICATORS'],
       ['Metric', 'Value'],
-      ['Total Revenue', formatCurrency(kpis?.total_revenue)],
-      ['Net Revenue', formatCurrency(kpis?.net_revenue)],
+      ['Short-Term Revenue', formatCurrency(kpis?.total_revenue)],
+      ['Annual Tenancy Revenue', formatCurrency(annualRevenue?.total_cleared)],
+      ['Combined Revenue', formatCurrency(getCombinedRevenue())],
+      ['Net Revenue (Short-Term)', formatCurrency(kpis?.net_revenue)],
       ['Total Expenses', formatCurrency(kpis?.total_expenses)],
       ['Net Operating Income', formatCurrency(kpis?.noi)],
+      ['Combined NOI', formatCurrency(getCombinedNOI())],
       ['Occupancy Rate', `${toNum(kpis?.occupancy_rate).toFixed(1)}%`],
       ['ADR', formatCurrency(kpis?.adr)],
       ['RevPAR', formatCurrency(kpis?.revpar)],
       ['Total Bookings', kpis?.total_bookings || 0],
       ['Total Nights', kpis?.total_nights || 0],
+      ['Active Tenancies', annualRevenue?.active_tenancies || 0],
     ];
     const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
@@ -282,6 +339,18 @@ export default function Reports() {
     const channelSheet = XLSX.utils.aoa_to_sheet([channelHeaders, ...channelRows]);
     XLSX.utils.book_append_sheet(wb, channelSheet, 'Channel Mix');
 
+    // Tenancy Sheet
+    const tenancyData = [
+      ['ANNUAL TENANCY SUMMARY'],
+      ['Metric', 'Value'],
+      ['Cleared Cheques', toNum(annualRevenue?.total_cleared)],
+      ['Pending Cheques', toNum(annualRevenue?.total_pending)],
+      ['Total Contract Value', toNum(annualRevenue?.total_contract_value)],
+      ['Active Tenancies', annualRevenue?.active_tenancies || 0],
+    ];
+    const tenancySheet = XLSX.utils.aoa_to_sheet(tenancyData);
+    XLSX.utils.book_append_sheet(wb, tenancySheet, 'Tenancy Revenue');
+
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     saveAs(new Blob([excelBuffer]), `PnL_Report_${propertyName}_${selectedYear}.xlsx`);
   };
@@ -290,6 +359,36 @@ export default function Reports() {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const periodLabel = getReportPeriodLabel();
+
+    if (reportType === 'tenancy') {
+      // Tenancy Only PDF
+      doc.setFontSize(20);
+      doc.text('Annual Tenancy Report', pageWidth / 2, 20, { align: 'center' });
+
+      doc.setFontSize(12);
+      doc.text(propertyName, pageWidth / 2, 28, { align: 'center' });
+      doc.text(`Period: ${periodLabel}`, pageWidth / 2, 35, { align: 'center' });
+      doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy')}`, pageWidth / 2, 42, { align: 'center' });
+
+      doc.setFontSize(14);
+      doc.text('Tenancy Revenue Summary', 14, 55);
+
+      autoTable(doc, {
+        startY: 60,
+        head: [['Metric', 'Value']],
+        body: [
+          ['Cleared Cheques', formatCurrency(annualRevenue?.total_cleared)],
+          ['Pending Cheques', formatCurrency(annualRevenue?.total_pending)],
+          ['Total Contract Value', formatCurrency(annualRevenue?.total_contract_value)],
+          ['Active Tenancies', annualRevenue?.active_tenancies || 0],
+        ],
+        theme: 'striped',
+        headStyles: { fillColor: [249, 115, 22] },
+      });
+
+      doc.save(`Tenancy_Report_${propertyName}_${selectedYear}.pdf`);
+      return;
+    }
 
     if (reportType === 'expenses') {
       // Expenses Only PDF
@@ -340,8 +439,11 @@ export default function Reports() {
         startY: 60,
         head: [['Metric', 'Value']],
         body: [
-          ['Total Revenue', formatCurrency(kpis?.total_revenue)],
+          ['Short-Term Revenue', formatCurrency(kpis?.total_revenue)],
           ['Net Revenue', formatCurrency(kpis?.net_revenue)],
+          ['Annual Tenancy (Cleared)', formatCurrency(annualRevenue?.total_cleared)],
+          ['Annual Tenancy (Pending)', formatCurrency(annualRevenue?.total_pending)],
+          ['Combined Revenue', formatCurrency(getCombinedRevenue())],
           ['Total Bookings', kpis?.total_bookings || 0],
           ['Total Nights', kpis?.total_nights || 0],
           ['Occupancy Rate', `${toNum(kpis?.occupancy_rate).toFixed(1)}%`],
@@ -390,10 +492,13 @@ export default function Reports() {
       startY: 60,
       head: [['Metric', 'Value']],
       body: [
-        ['Total Revenue', formatCurrency(kpis?.total_revenue)],
+        ['Short-Term Revenue', formatCurrency(kpis?.total_revenue)],
+        ['Annual Tenancy Revenue', formatCurrency(annualRevenue?.total_cleared)],
+        ['Combined Revenue', formatCurrency(getCombinedRevenue())],
         ['Net Revenue', formatCurrency(kpis?.net_revenue)],
         ['Total Expenses', formatCurrency(kpis?.total_expenses)],
         ['Net Operating Income', formatCurrency(kpis?.noi)],
+        ['Combined NOI', formatCurrency(getCombinedNOI())],
         ['Occupancy Rate', `${toNum(kpis?.occupancy_rate).toFixed(1)}%`],
         ['ADR', formatCurrency(kpis?.adr)],
         ['RevPAR', formatCurrency(kpis?.revpar)],
@@ -454,6 +559,23 @@ export default function Reports() {
       ]),
       theme: 'striped',
       headStyles: { fillColor: [59, 130, 246] },
+    });
+
+    const finalY3 = (doc as any).lastAutoTable.finalY || 25;
+    doc.setFontSize(14);
+    doc.text('Annual Tenancy Revenue', 14, finalY3 + 15);
+
+    autoTable(doc, {
+      startY: finalY3 + 20,
+      head: [['Metric', 'Value']],
+      body: [
+        ['Cleared Cheques', formatCurrency(annualRevenue?.total_cleared)],
+        ['Pending Cheques', formatCurrency(annualRevenue?.total_pending)],
+        ['Total Contract Value', formatCurrency(annualRevenue?.total_contract_value)],
+        ['Active Tenancies', annualRevenue?.active_tenancies || 0],
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [249, 115, 22] },
     });
 
     doc.save(`PnL_Report_${propertyName}_${selectedYear}.pdf`);
@@ -529,12 +651,13 @@ export default function Reports() {
           </select>
           <select
             value={reportType}
-            onChange={(e) => setReportType(e.target.value as 'full' | 'expenses' | 'revenue')}
+            onChange={(e) => setReportType(e.target.value as 'full' | 'expenses' | 'revenue' | 'tenancy')}
             className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="full">Full P&L Report</option>
             <option value="expenses">Expenses Only</option>
             <option value="revenue">Revenue Only</option>
+            <option value="tenancy">Tenancy Only</option>
           </select>
         </div>
         <div className="flex gap-2">
@@ -568,8 +691,16 @@ export default function Reports() {
           <h2 className="text-lg font-semibold mb-4">Key Performance Indicators</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-4 bg-blue-50 rounded-lg">
-              <p className="text-sm text-gray-600">Total Revenue</p>
+              <p className="text-sm text-gray-600">Short-Term Revenue</p>
               <p className="text-xl font-bold text-blue-600">{formatCurrency(kpis?.total_revenue)}</p>
+            </div>
+            <div className="p-4 bg-orange-50 rounded-lg">
+              <p className="text-sm text-gray-600">Annual Tenancy</p>
+              <p className="text-xl font-bold text-orange-600">{formatCurrency(annualRevenue?.total_cleared)}</p>
+            </div>
+            <div className="p-4 bg-emerald-50 rounded-lg">
+              <p className="text-sm text-gray-600">Combined Revenue</p>
+              <p className="text-xl font-bold text-emerald-600">{formatCurrency(getCombinedRevenue())}</p>
             </div>
             <div className="p-4 bg-green-50 rounded-lg">
               <p className="text-sm text-gray-600">Net Revenue</p>
@@ -591,13 +722,30 @@ export default function Reports() {
               <p className="text-sm text-gray-600">ADR</p>
               <p className="text-xl font-bold text-gray-700">{formatCurrency(kpis?.adr)}</p>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600">RevPAR</p>
-              <p className="text-xl font-bold text-gray-700">{formatCurrency(kpis?.revpar)}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Tenancy Revenue Section */}
+      {(reportType === 'full' || reportType === 'tenancy') && annualRevenue && (
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">Annual Tenancy Revenue</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 bg-emerald-50 rounded-lg">
+              <p className="text-sm text-gray-600">Cleared Cheques</p>
+              <p className="text-xl font-bold text-emerald-600">{formatCurrency(annualRevenue.total_cleared)}</p>
+            </div>
+            <div className="p-4 bg-amber-50 rounded-lg">
+              <p className="text-sm text-gray-600">Pending Cheques</p>
+              <p className="text-xl font-bold text-amber-600">{formatCurrency(annualRevenue.total_pending)}</p>
+            </div>
+            <div className="p-4 bg-blue-50 rounded-lg">
+              <p className="text-sm text-gray-600">Total Contract Value</p>
+              <p className="text-xl font-bold text-blue-600">{formatCurrency(annualRevenue.total_contract_value)}</p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600">Bookings</p>
-              <p className="text-xl font-bold text-gray-700">{kpis?.total_bookings || 0}</p>
+              <p className="text-sm text-gray-600">Active Tenancies</p>
+              <p className="text-xl font-bold text-gray-700">{annualRevenue.active_tenancies}</p>
             </div>
           </div>
         </div>

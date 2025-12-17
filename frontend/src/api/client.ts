@@ -30,6 +30,121 @@ axiosInstance.interceptors.response.use(
   }
 );
 
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+export interface TenancyCheque {
+  id: string;
+  tenancy_id: string;
+  cheque_number: string;
+  bank_name: string;
+  amount: number;
+  due_date: string;
+  status: 'pending' | 'deposited' | 'cleared' | 'bounced';
+  deposited_date?: string;
+  cleared_date?: string;
+  bounce_reason?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenancyDocument {
+  id: string;
+  tenancy_id: string;
+  document_type: 'contract' | 'emirates_id' | 'passport' | 'trade_license' | 'other';
+  filename: string;
+  file_size?: number;
+  mime_type?: string;
+  uploaded_at: string;
+}
+
+export interface Tenancy {
+  id: string;
+  property_id: string;
+  tenant_name: string;
+  tenant_email: string;
+  tenant_phone: string;
+  contract_start: string;
+  contract_end: string;
+  annual_rent: number;
+  contract_value: number;
+  security_deposit: number;
+  num_cheques: 1 | 2 | 4 | 6 | 12;
+  ejari_number?: string;
+  status: 'active' | 'expired' | 'terminated' | 'renewed';
+  previous_tenancy_id?: string;
+  termination_date?: string;
+  termination_reason?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  cheques?: TenancyCheque[];
+  documents?: TenancyDocument[];
+  property_name?: string;
+}
+
+export interface TenancyCreateInput {
+  property_id: string;
+  tenant_name: string;
+  tenant_email: string;
+  tenant_phone: string;
+  contract_start: string;
+  contract_end: string;
+  annual_rent: number;
+  contract_value: number;
+  security_deposit?: number;
+  num_cheques: 1 | 2 | 4 | 6 | 12;
+  ejari_number?: string;
+  notes?: string;
+  cheques?: {
+    cheque_number: string;
+    bank_name: string;
+    amount: number;
+    due_date: string;
+  }[];
+  auto_split_cheques?: boolean;
+}
+
+export interface TenancyRenewInput {
+  contract_start: string;
+  contract_end: string;
+  annual_rent: number;
+  contract_value: number;
+  security_deposit?: number;
+  num_cheques: 1 | 2 | 4 | 6 | 12;
+  ejari_number?: string;
+  notes?: string;
+  cheques?: {
+    cheque_number: string;
+    bank_name: string;
+    amount: number;
+    due_date: string;
+  }[];
+  auto_split_cheques?: boolean;
+}
+
+export interface UpcomingCheque {
+  id: string;
+  tenancy_id: string;
+  property_id: string;
+  property_name: string;
+  tenant_name: string;
+  cheque_number: string;
+  bank_name: string;
+  amount: number;
+  due_date: string;
+  status: string;
+  days_until_due: number;
+}
+
+export interface UpcomingChequesResponse {
+  cheques: UpcomingCheque[];
+  total_amount: number;
+  count: number;
+}
+
 // API methods
 const api = {
   // Base axios methods
@@ -99,6 +214,82 @@ const api = {
   updateUser: (userId: string, data: { email: string; password?: string; full_name?: string; role: string }) =>
     axiosInstance.put(`/auth/users/${userId}`, data),
   deleteUser: (userId: string) => axiosInstance.delete(`/auth/users/${userId}`),
+
+  // ============================================================================
+  // TENANCY API METHODS
+  // ============================================================================
+
+  // Tenancies - CRUD
+  getTenancies: (params?: { property_id?: string; status?: string }) =>
+    axiosInstance.get<Tenancy[]>('/tenancies', { params }),
+
+  getTenancy: (id: string) =>
+    axiosInstance.get<Tenancy>(`/tenancies/${id}`),
+
+  createTenancy: (data: TenancyCreateInput) =>
+    axiosInstance.post<Tenancy>('/tenancies', data),
+
+  updateTenancy: (id: string, data: Partial<TenancyCreateInput>) =>
+    axiosInstance.put<Tenancy>(`/tenancies/${id}`, data),
+
+  deleteTenancy: (id: string) =>
+    axiosInstance.delete(`/tenancies/${id}`),
+
+  // Tenancy Lifecycle
+  terminateTenancy: (id: string, data: { termination_date: string; termination_reason: string }) =>
+    axiosInstance.post<Tenancy>(`/tenancies/${id}/terminate`, data),
+
+  renewTenancy: (id: string, data: TenancyRenewInput) =>
+    axiosInstance.post<Tenancy>(`/tenancies/${id}/renew`, data),
+
+  // Cheque Management
+  getTenancyCheques: (tenancyId: string) =>
+    axiosInstance.get<TenancyCheque[]>(`/tenancies/${tenancyId}/cheques`),
+
+  updateCheque: (tenancyId: string, chequeId: string, data: Partial<TenancyCheque>) =>
+    axiosInstance.put<TenancyCheque>(`/tenancies/${tenancyId}/cheques/${chequeId}`, data),
+
+  depositCheque: (tenancyId: string, chequeId: string) =>
+    axiosInstance.post<TenancyCheque>(`/tenancies/${tenancyId}/cheques/${chequeId}/deposit`),
+
+  clearCheque: (tenancyId: string, chequeId: string) =>
+    axiosInstance.post<TenancyCheque>(`/tenancies/${tenancyId}/cheques/${chequeId}/clear`),
+
+  bounceCheque: (tenancyId: string, chequeId: string, reason?: string) =>
+    axiosInstance.post<TenancyCheque>(`/tenancies/${tenancyId}/cheques/${chequeId}/bounce`, null, {
+      params: { reason: reason || 'Insufficient funds' }
+    }),
+
+  // Document Management
+  getTenancyDocuments: (tenancyId: string) =>
+    axiosInstance.get<TenancyDocument[]>(`/tenancies/${tenancyId}/documents`),
+
+  uploadTenancyDocument: (tenancyId: string, data: {
+    document_type: string;
+    filename: string;
+    file_data: string;
+    file_size?: number;
+    mime_type?: string;
+  }) => axiosInstance.post<TenancyDocument>(`/tenancies/${tenancyId}/documents`, data),
+
+  getTenancyDocument: (tenancyId: string, documentId: string) =>
+    axiosInstance.get<TenancyDocument & { file_data: string }>(`/tenancies/${tenancyId}/documents/${documentId}`),
+
+  deleteTenancyDocument: (tenancyId: string, documentId: string) =>
+    axiosInstance.delete(`/tenancies/${tenancyId}/documents/${documentId}`),
+
+  // Dashboard - Upcoming Cheques
+  getUpcomingCheques: (params?: { property_id?: string; days?: number }) =>
+    axiosInstance.get<UpcomingChequesResponse>('/tenancies/dashboard/upcoming-cheques', { params }),
+
+  // Annual Revenue Summary (for Reports)
+  getAnnualRevenue: (params: { property_id: string; start_date: string; end_date: string }) =>
+    axiosInstance.get<{
+      total_cleared: number;
+      total_pending: number;
+      total_contract_value: number;
+      active_tenancies: number;
+    }>('/tenancies/dashboard/annual-revenue', { params }),
 };
 
 export { api };

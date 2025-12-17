@@ -10,6 +10,7 @@ import {
   Users,
   Calendar,
   Home,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Calendar', href: '/calendar', icon: Calendar },
   { name: 'Bookings', href: '/bookings', icon: CalendarDays },
+  { name: 'Tenancies', href: '/tenancies', icon: FileText },
   { name: 'Expenses', href: '/expenses', icon: Receipt },
   { name: 'Properties', href: '/properties', icon: Building2 },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
