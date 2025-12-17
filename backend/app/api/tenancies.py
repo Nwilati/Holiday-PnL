@@ -855,3 +855,79 @@ def get_upcoming_cheques(
         total_amount=total_amount,
         count=len(cheques)
     )
+
+
+@router.get("/dashboard/annual-revenue")
+def get_annual_revenue(
+    property_id: UUID,
+    start_date: date,
+    end_date: date,
+    db: Session = Depends(get_db)
+):
+    """Get annual tenancy revenue summary for reports."""
+    # Get cleared cheque amounts
+    cleared_sql = text("""
+        SELECT COALESCE(SUM(c.amount), 0) as total
+        FROM tenancy_cheques c
+        JOIN tenancies t ON c.tenancy_id = t.id
+        WHERE t.property_id = :property_id
+        AND c.status = 'cleared'
+        AND c.cleared_date BETWEEN :start_date AND :end_date
+    """)
+    total_cleared = db.execute(cleared_sql, {
+        'property_id': property_id,
+        'start_date': start_date,
+        'end_date': end_date
+    }).scalar() or Decimal('0')
+
+    # Get pending cheque amounts (due within the date range)
+    pending_sql = text("""
+        SELECT COALESCE(SUM(c.amount), 0) as total
+        FROM tenancy_cheques c
+        JOIN tenancies t ON c.tenancy_id = t.id
+        WHERE t.property_id = :property_id
+        AND c.status IN ('pending', 'deposited')
+        AND c.due_date BETWEEN :start_date AND :end_date
+    """)
+    total_pending = db.execute(pending_sql, {
+        'property_id': property_id,
+        'start_date': start_date,
+        'end_date': end_date
+    }).scalar() or Decimal('0')
+
+    # Get total contract value for active tenancies in the period
+    contract_sql = text("""
+        SELECT COALESCE(SUM(contract_value), 0) as total
+        FROM tenancies
+        WHERE property_id = :property_id
+        AND status = 'active'
+        AND contract_start <= :end_date
+        AND contract_end >= :start_date
+    """)
+    total_contract_value = db.execute(contract_sql, {
+        'property_id': property_id,
+        'start_date': start_date,
+        'end_date': end_date
+    }).scalar() or Decimal('0')
+
+    # Count active tenancies
+    count_sql = text("""
+        SELECT COUNT(*) as total
+        FROM tenancies
+        WHERE property_id = :property_id
+        AND status = 'active'
+        AND contract_start <= :end_date
+        AND contract_end >= :start_date
+    """)
+    active_tenancies = db.execute(count_sql, {
+        'property_id': property_id,
+        'start_date': start_date,
+        'end_date': end_date
+    }).scalar() or 0
+
+    return {
+        "total_cleared": float(total_cleared),
+        "total_pending": float(total_pending),
+        "total_contract_value": float(total_contract_value),
+        "active_tenancies": active_tenancies
+    }
