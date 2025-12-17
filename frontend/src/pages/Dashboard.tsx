@@ -55,6 +55,7 @@ interface ChannelData {
   channel_name: string;
   revenue: number;
   percentage: number;
+  [key: string]: string | number;
 }
 
 interface UpcomingCheque {
@@ -346,7 +347,7 @@ export default function Dashboard() {
                 <XAxis dataKey="month" stroke="#78716c" fontSize={12} />
                 <YAxis stroke="#78716c" fontSize={12} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
                 <Tooltip
-                  formatter={(value: number) => [formatCurrency(value), '']}
+                  formatter={(value) => [formatCurrency(Number(value) || 0), 'Revenue']}
                   contentStyle={{ borderRadius: '12px', border: '1px solid #e7e5e4' }}
                 />
                 <Area
@@ -375,7 +376,7 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
                   <Pie
-                    data={channelMix}
+                    data={channelMix as any[]}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
@@ -389,7 +390,7 @@ export default function Dashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number) => [formatCurrency(value), '']}
+                    formatter={(value) => [formatCurrency(Number(value) || 0), 'Revenue']}
                     contentStyle={{ borderRadius: '12px', border: '1px solid #e7e5e4' }}
                   />
                 </PieChart>

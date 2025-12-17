@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(echo.)",
-      "Bash(del \"c:\\Users\\AbdulGhaniNwilati\\Desktop\\rental software\\frontend\\tailwind.config.js\")"
+      "Bash(del \"c:\\Users\\AbdulGhaniNwilati\\Desktop\\rental software\\frontend\\tailwind.config.js\")",
+      "Bash(npm run build:*)"
     ]
   }
 }
