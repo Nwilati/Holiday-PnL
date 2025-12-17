@@ -338,37 +338,75 @@ def get_tenancy(tenancy_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.put("/{tenancy_id}", response_model=TenancyResponse)
-def update_tenancy(tenancy_id: UUID, tenancy_data: TenancyUpdate, db: Session = Depends(get_db)):
-    """Update tenancy details."""
+def update_tenancy(
+    tenancy_id: UUID,
+    tenancy_data: TenancyUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update a tenancy."""
+    # Get existing tenancy
     tenancy = db.query(Tenancy).filter(Tenancy.id == tenancy_id).first()
     if not tenancy:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenancy not found")
+        raise HTTPException(status_code=404, detail="Tenancy not found")
 
-    if str(tenancy.status) in ['terminated', 'renewed']:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot update terminated or renewed tenancy"
-        )
+    if str(tenancy.status) != 'active':
+        raise HTTPException(status_code=400, detail="Can only update active tenancies")
 
+    # Check if num_cheques is changing
+    old_num_cheques = tenancy.num_cheques
+    new_num_cheques = tenancy_data.num_cheques if tenancy_data.num_cheques else old_num_cheques
+
+    # Update fields
     update_data = tenancy_data.model_dump(exclude_unset=True)
 
-    if update_data:
-        set_clauses = []
-        params = {'id': tenancy_id}
+    for field, value in update_data.items():
+        setattr(tenancy, field, value)
 
-        for field, value in update_data.items():
-            set_clauses.append(f"{field} = :{field}")
-            params[field] = value
+    db.commit()
 
-        sql = text(f"UPDATE tenancies SET {', '.join(set_clauses)}, updated_at = NOW() WHERE id = :id")
-        db.execute(sql, params)
+    # Update calendar block if dates changed
+    if 'contract_start' in update_data or 'contract_end' in update_data:
+        remove_calendar_block_for_tenancy(db, tenancy_id)
+        new_start = update_data.get('contract_start', tenancy.contract_start)
+        new_end = update_data.get('contract_end', tenancy.contract_end)
+        create_calendar_block_for_tenancy(db, tenancy.property_id, tenancy_id, new_start, new_end)
+        db.commit()
 
-        # Update calendar block if dates changed
-        if 'contract_start' in update_data or 'contract_end' in update_data:
-            remove_calendar_block_for_tenancy(db, tenancy_id)
-            new_start = update_data.get('contract_start', tenancy.contract_start)
-            new_end = update_data.get('contract_end', tenancy.contract_end)
-            create_calendar_block_for_tenancy(db, tenancy.property_id, tenancy_id, new_start, new_end)
+    # If num_cheques changed, regenerate cheques (only if no cleared cheques)
+    if new_num_cheques != old_num_cheques:
+        # Check for cleared cheques
+        cleared_count = db.query(TenancyCheque).filter(
+            TenancyCheque.tenancy_id == tenancy_id,
+            TenancyCheque.status == 'cleared'
+        ).count()
+
+        if cleared_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot change number of cheques when some cheques are already cleared"
+            )
+
+        # Delete existing cheques
+        db.query(TenancyCheque).filter(TenancyCheque.tenancy_id == tenancy_id).delete()
+
+        # Create new cheques
+        cheque_schedule = calculate_cheque_schedule(
+            tenancy.contract_start,
+            tenancy.annual_rent,
+            new_num_cheques
+        )
+
+        for cheque_data in cheque_schedule:
+            cheque = TenancyCheque(
+                id=uuid4(),
+                tenancy_id=tenancy_id,
+                cheque_number=cheque_data['cheque_number'],
+                bank_name=cheque_data['bank_name'],
+                amount=cheque_data['amount'],
+                due_date=cheque_data['due_date'],
+                status='pending'
+            )
+            db.add(cheque)
 
         db.commit()
 
