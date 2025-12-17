@@ -51,6 +51,7 @@ class Property(Base):
     # Relationships
     bookings = relationship("Booking", back_populates="property")
     expenses = relationship("Expense", back_populates="property")
+    tenancies = relationship("Tenancy", back_populates="property")
 
 
 class Channel(Base):
@@ -221,3 +222,94 @@ class AuditLog(Base):
     changed_at = Column(DateTime(timezone=True), server_default=func.now())
     ip_address = Column(INET)
     user_agent = Column(Text)
+
+
+# ============================================================================
+# ANNUAL TENANCY MODELS
+# ============================================================================
+
+class Tenancy(Base):
+    __tablename__ = "tenancies"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    property_id = Column(UUID(as_uuid=True), ForeignKey('properties.id'), nullable=False)
+
+    # Tenant Information
+    tenant_name = Column(String(255), nullable=False)
+    tenant_email = Column(String(255), nullable=False)
+    tenant_phone = Column(String(50), nullable=False)
+
+    # Contract Details
+    contract_start = Column(Date, nullable=False)
+    contract_end = Column(Date, nullable=False)
+    annual_rent = Column(Numeric(12, 2), nullable=False)
+    contract_value = Column(Numeric(12, 2), nullable=False)
+    security_deposit = Column(Numeric(12, 2), default=0)
+    num_cheques = Column(Integer, nullable=False)
+    ejari_number = Column(String(100))
+
+    # Status and Lifecycle
+    status = Column(PgEnum('active', 'expired', 'terminated', 'renewed', name='tenancy_status', create_type=False), default='active')
+    previous_tenancy_id = Column(UUID(as_uuid=True), ForeignKey('tenancies.id'))
+    termination_date = Column(Date)
+    termination_reason = Column(Text)
+
+    # Additional
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+
+    # Relationships
+    property = relationship("Property", back_populates="tenancies")
+    cheques = relationship("TenancyCheque", back_populates="tenancy", cascade="all, delete-orphan")
+    documents = relationship("TenancyDocument", back_populates="tenancy", cascade="all, delete-orphan")
+    previous_tenancy = relationship("Tenancy", remote_side=[id], backref="renewed_tenancy")
+
+
+class TenancyCheque(Base):
+    __tablename__ = "tenancy_cheques"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenancy_id = Column(UUID(as_uuid=True), ForeignKey('tenancies.id'), nullable=False)
+
+    # Cheque Details
+    cheque_number = Column(String(50), nullable=False)
+    bank_name = Column(String(100), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    due_date = Column(Date, nullable=False)
+
+    # Status Tracking
+    status = Column(PgEnum('pending', 'deposited', 'cleared', 'bounced', name='cheque_status', create_type=False), default='pending')
+    deposited_date = Column(Date)
+    cleared_date = Column(Date)
+    bounce_reason = Column(Text)
+
+    # Additional
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    tenancy = relationship("Tenancy", back_populates="cheques")
+
+
+class TenancyDocument(Base):
+    __tablename__ = "tenancy_documents"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenancy_id = Column(UUID(as_uuid=True), ForeignKey('tenancies.id'), nullable=False)
+
+    # Document Details
+    document_type = Column(PgEnum('contract', 'emirates_id', 'passport', 'trade_license', 'other', name='document_type', create_type=False), nullable=False)
+    filename = Column(String(255), nullable=False)
+    file_data = Column(Text, nullable=False)  # Base64 encoded
+    file_size = Column(Integer)
+    mime_type = Column(String(100))
+
+    # Timestamps
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+    uploaded_by = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+
+    # Relationships
+    tenancy = relationship("Tenancy", back_populates="documents")

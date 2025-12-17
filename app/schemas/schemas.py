@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import date, datetime
 from uuid import UUID
 from decimal import Decimal
@@ -352,3 +352,172 @@ class ExpenseBreakdown(BaseModel):
     category_name: str
     amount: Decimal
     percentage: Decimal
+
+
+# ============================================================================
+# TENANCY CHEQUE SCHEMAS
+# ============================================================================
+
+class TenancyChequeBase(BaseModel):
+    cheque_number: str
+    bank_name: str
+    amount: Decimal
+    due_date: date
+    status: Literal['pending', 'deposited', 'cleared', 'bounced'] = 'pending'
+    deposited_date: Optional[date] = None
+    cleared_date: Optional[date] = None
+    bounce_reason: Optional[str] = None
+    notes: Optional[str] = None
+
+class TenancyChequeCreate(TenancyChequeBase):
+    pass
+
+class TenancyChequeUpdate(BaseModel):
+    cheque_number: Optional[str] = None
+    bank_name: Optional[str] = None
+    amount: Optional[Decimal] = None
+    due_date: Optional[date] = None
+    status: Optional[Literal['pending', 'deposited', 'cleared', 'bounced']] = None
+    deposited_date: Optional[date] = None
+    cleared_date: Optional[date] = None
+    bounce_reason: Optional[str] = None
+    notes: Optional[str] = None
+
+class TenancyChequeResponse(TenancyChequeBase):
+    id: UUID
+    tenancy_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
+# TENANCY DOCUMENT SCHEMAS
+# ============================================================================
+
+class TenancyDocumentBase(BaseModel):
+    document_type: Literal['contract', 'emirates_id', 'passport', 'trade_license', 'other']
+    filename: str
+
+class TenancyDocumentCreate(TenancyDocumentBase):
+    file_data: str  # Base64 encoded
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+
+class TenancyDocumentResponse(TenancyDocumentBase):
+    id: UUID
+    tenancy_id: UUID
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    uploaded_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class TenancyDocumentWithData(TenancyDocumentResponse):
+    file_data: str  # Include base64 data for download
+
+
+# ============================================================================
+# TENANCY SCHEMAS
+# ============================================================================
+
+class TenancyBase(BaseModel):
+    property_id: UUID
+    tenant_name: str
+    tenant_email: EmailStr
+    tenant_phone: str
+    contract_start: date
+    contract_end: date
+    annual_rent: Decimal
+    contract_value: Decimal
+    security_deposit: Decimal = Decimal("0")
+    num_cheques: Literal[1, 2, 4, 6, 12]
+    ejari_number: Optional[str] = None
+    notes: Optional[str] = None
+
+class TenancyChequeInput(BaseModel):
+    cheque_number: str
+    bank_name: str
+    amount: Decimal
+    due_date: date
+
+class TenancyCreate(TenancyBase):
+    cheques: Optional[List[TenancyChequeInput]] = None  # Manual cheque entry (optional)
+    auto_split_cheques: bool = True  # Auto-split if cheques not provided
+
+class TenancyUpdate(BaseModel):
+    tenant_name: Optional[str] = None
+    tenant_email: Optional[EmailStr] = None
+    tenant_phone: Optional[str] = None
+    contract_start: Optional[date] = None
+    contract_end: Optional[date] = None
+    annual_rent: Optional[Decimal] = None
+    contract_value: Optional[Decimal] = None
+    security_deposit: Optional[Decimal] = None
+    num_cheques: Optional[Literal[1, 2, 4, 6, 12]] = None
+    ejari_number: Optional[str] = None
+    notes: Optional[str] = None
+
+class TenancyResponse(TenancyBase):
+    id: UUID
+    status: str
+    previous_tenancy_id: Optional[UUID] = None
+    termination_date: Optional[date] = None
+    termination_reason: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class TenancyWithDetails(TenancyResponse):
+    cheques: List[TenancyChequeResponse] = []
+    documents: List[TenancyDocumentResponse] = []
+    property_name: Optional[str] = None
+
+
+# ============================================================================
+# TENANCY LIFECYCLE SCHEMAS
+# ============================================================================
+
+class TenancyTerminate(BaseModel):
+    termination_date: date
+    termination_reason: str
+
+class TenancyRenew(BaseModel):
+    contract_start: date
+    contract_end: date
+    annual_rent: Decimal
+    contract_value: Decimal
+    security_deposit: Decimal = Decimal("0")
+    num_cheques: Literal[1, 2, 4, 6, 12]
+    ejari_number: Optional[str] = None
+    notes: Optional[str] = None
+    cheques: Optional[List[TenancyChequeInput]] = None
+    auto_split_cheques: bool = True
+
+
+# ============================================================================
+# UPCOMING CHEQUES (DASHBOARD) SCHEMAS
+# ============================================================================
+
+class UpcomingCheque(BaseModel):
+    id: UUID
+    tenancy_id: UUID
+    property_id: UUID
+    property_name: str
+    tenant_name: str
+    cheque_number: str
+    bank_name: str
+    amount: Decimal
+    due_date: date
+    status: str
+    days_until_due: int
+
+class UpcomingChequesResponse(BaseModel):
+    cheques: List[UpcomingCheque]
+    total_amount: Decimal
+    count: int
