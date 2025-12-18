@@ -11,6 +11,7 @@ import {
   Calendar,
   Home,
   FileText,
+  BookOpen,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'Bookings', href: '/bookings', icon: CalendarDays },
   { name: 'Tenancies', href: '/tenancies', icon: FileText },
   { name: 'Expenses', href: '/expenses', icon: Receipt },
+  { name: 'Accounting', href: '/accounting', icon: BookOpen },
   { name: 'Properties', href: '/properties', icon: Building2 },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Users', href: '/users', icon: Users },
