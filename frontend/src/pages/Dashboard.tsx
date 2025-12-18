@@ -567,7 +567,11 @@ export default function Dashboard() {
                 </PieChart>
               </ResponsiveContainer>
               <p className="text-sm font-medium text-stone-600 mt-1">
-                {((annualRevenue.total_cleared / (annualRevenue.total_cleared + annualRevenue.total_pending || 1)) * 100).toFixed(0)}% Collected
+                {(() => {
+                  const total = annualRevenue.total_cleared + annualRevenue.total_pending;
+                  const collectedPercent = total > 0 ? (annualRevenue.total_cleared / total) * 100 : 0;
+                  return `${collectedPercent.toFixed(1)}% Collected`;
+                })()}
               </p>
             </div>
             <div className="p-4 bg-emerald-50 rounded-xl">
