@@ -145,6 +145,15 @@ export default function Tenancies() {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [docType, setDocType] = useState('contract');
 
+  // Cheque editing
+  const [editingChequeId, setEditingChequeId] = useState<string | null>(null);
+  const [editChequeData, setEditChequeData] = useState({
+    cheque_number: '',
+    bank_name: '',
+    due_date: '',
+    amount: 0,
+  });
+
   useEffect(() => {
     loadProperties();
   }, []);
@@ -398,6 +407,49 @@ export default function Tenancies() {
       }
     } catch (error) {
       console.error('Failed to mark cheque as bounced:', error);
+    }
+  };
+
+  const handleEditCheque = (cheque: Cheque) => {
+    setEditingChequeId(cheque.id);
+    setEditChequeData({
+      cheque_number: cheque.cheque_number,
+      bank_name: cheque.bank_name,
+      due_date: cheque.due_date,
+      amount: cheque.amount,
+    });
+  };
+
+  const handleCancelEditCheque = () => {
+    setEditingChequeId(null);
+    setEditChequeData({
+      cheque_number: '',
+      bank_name: '',
+      due_date: '',
+      amount: 0,
+    });
+  };
+
+  const handleSaveCheque = async () => {
+    if (!selectedTenancy || !editingChequeId) return;
+
+    try {
+      await api.updateCheque(selectedTenancy.id, editingChequeId, {
+        cheque_number: editChequeData.cheque_number,
+        bank_name: editChequeData.bank_name,
+        due_date: editChequeData.due_date,
+        amount: Number(editChequeData.amount),
+      });
+
+      // Refresh tenancy data
+      const response = await api.getTenancy(selectedTenancy.id);
+      setSelectedTenancy(response.data as any);
+
+      // Reset editing state
+      handleCancelEditCheque();
+    } catch (error) {
+      console.error('Failed to update cheque:', error);
+      alert('Failed to update cheque. Please try again.');
     }
   };
 
@@ -867,50 +919,123 @@ export default function Tenancies() {
                   {selectedTenancy.cheques?.map((cheque) => (
                     <div
                       key={cheque.id}
-                      className="flex items-center justify-between p-4 bg-stone-50 rounded-xl"
+                      className="p-4 bg-stone-50 rounded-xl"
                     >
-                      <div className="flex items-center gap-4">
-                        <div className={`px-3 py-1 rounded-full text-xs font-medium ${CHEQUE_STATUS_COLORS[cheque.status]}`}>
-                          {cheque.status.charAt(0).toUpperCase() + cheque.status.slice(1)}
-                        </div>
-                        <div>
-                          <p className="font-medium text-stone-800">
-                            {cheque.cheque_number} - {cheque.bank_name}
-                          </p>
-                          <p className="text-sm text-stone-500">
-                            Due: {formatDate(cheque.due_date)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <p className="font-bold text-stone-800">{formatCurrency(cheque.amount)}</p>
-                        <div className="flex gap-1">
-                          {cheque.status === 'pending' && (
+                      {editingChequeId === cheque.id ? (
+                        // Edit mode
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-stone-500 mb-1">Cheque Number</label>
+                              <input
+                                type="text"
+                                value={editChequeData.cheque_number}
+                                onChange={(e) => setEditChequeData({ ...editChequeData, cheque_number: e.target.value })}
+                                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-stone-500 mb-1">Bank Name</label>
+                              <input
+                                type="text"
+                                value={editChequeData.bank_name}
+                                onChange={(e) => setEditChequeData({ ...editChequeData, bank_name: e.target.value })}
+                                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-stone-500 mb-1">Due Date</label>
+                              <input
+                                type="date"
+                                value={editChequeData.due_date}
+                                onChange={(e) => setEditChequeData({ ...editChequeData, due_date: e.target.value })}
+                                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-stone-500 mb-1">Amount (AED)</label>
+                              <input
+                                type="number"
+                                value={editChequeData.amount}
+                                onChange={(e) => setEditChequeData({ ...editChequeData, amount: Number(e.target.value) })}
+                                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2 pt-2">
                             <button
-                              onClick={() => handleDepositCheque(cheque.id)}
-                              className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
+                              onClick={handleCancelEditCheque}
+                              className="px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-200 rounded-lg"
                             >
-                              Deposit
+                              Cancel
                             </button>
-                          )}
-                          {cheque.status === 'deposited' && (
-                            <>
-                              <button
-                                onClick={() => handleClearCheque(cheque.id)}
-                                className="px-3 py-1 text-sm bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200"
-                              >
-                                Clear
-                              </button>
-                              <button
-                                onClick={() => handleBounceCheque(cheque.id)}
-                                className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200"
-                              >
-                                Bounce
-                              </button>
-                            </>
-                          )}
+                            <button
+                              onClick={handleSaveCheque}
+                              className="px-3 py-1.5 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+                            >
+                              Save Changes
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        // View mode
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className={`px-3 py-1 rounded-full text-xs font-medium ${CHEQUE_STATUS_COLORS[cheque.status]}`}>
+                              {cheque.status.charAt(0).toUpperCase() + cheque.status.slice(1)}
+                            </div>
+                            <div>
+                              <p className="font-medium text-stone-800">
+                                {cheque.cheque_number} - {cheque.bank_name}
+                              </p>
+                              <p className="text-sm text-stone-500">
+                                Due: {formatDate(cheque.due_date)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <p className="font-bold text-stone-800">{formatCurrency(cheque.amount)}</p>
+                            <div className="flex gap-1">
+                              {/* Edit button - only for pending/deposited cheques */}
+                              {(cheque.status === 'pending' || cheque.status === 'deposited') && (
+                                <button
+                                  onClick={() => handleEditCheque(cheque)}
+                                  className="px-3 py-1 text-sm bg-stone-200 text-stone-700 rounded-lg hover:bg-stone-300"
+                                  title="Edit cheque details"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                              )}
+                              {cheque.status === 'pending' && (
+                                <button
+                                  onClick={() => handleDepositCheque(cheque.id)}
+                                  className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
+                                >
+                                  Deposit
+                                </button>
+                              )}
+                              {cheque.status === 'deposited' && (
+                                <>
+                                  <button
+                                    onClick={() => handleClearCheque(cheque.id)}
+                                    className="px-3 py-1 text-sm bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200"
+                                  >
+                                    Clear
+                                  </button>
+                                  <button
+                                    onClick={() => handleBounceCheque(cheque.id)}
+                                    className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200"
+                                  >
+                                    Bounce
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

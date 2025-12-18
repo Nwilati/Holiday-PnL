@@ -37,9 +37,18 @@ def get_kpis(
         cast(Booking.status, String).notin_(['cancelled', 'no_show'])
     ).first()
 
-    # Get expense stats
+    # Get expense stats - all expenses for display
     expense_total = db.query(
         func.sum(Expense.total_amount).label('total_expenses')
+    ).filter(
+        Expense.property_id == property_id,
+        Expense.expense_date >= start_date,
+        Expense.expense_date <= end_date
+    ).scalar() or Decimal('0')
+
+    # Get operating expenses only for NOI calculation
+    operating_expense_total = db.query(
+        func.sum(Expense.total_amount).label('operating_expenses')
     ).join(ExpenseCategory).filter(
         Expense.property_id == property_id,
         Expense.expense_date >= start_date,
@@ -55,7 +64,7 @@ def get_kpis(
     total_bookings = booking_stats.total_bookings or 0
     adr = booking_stats.adr or Decimal('0')
 
-    noi = net_revenue - expense_total
+    noi = net_revenue - operating_expense_total
     occupancy_rate = Decimal(total_nights / total_days * 100) if total_days > 0 else Decimal('0')
     revpar = net_revenue / total_days if total_days > 0 else Decimal('0')
     expense_ratio = (expense_total / net_revenue * 100) if net_revenue > 0 else Decimal('0')
