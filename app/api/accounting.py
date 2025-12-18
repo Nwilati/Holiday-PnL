@@ -475,10 +475,12 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Booking not found")
 
     # Check if journal already exists
-    existing = db.query(JournalEntry).filter(
-        JournalEntry.source == 'booking',
-        JournalEntry.source_id == booking_id
-    ).first()
+    existing = db.execute(text('''
+        SELECT id, entry_number FROM journal_entries
+        WHERE source = :source
+        AND source_id = :source_id
+        LIMIT 1
+    '''), {'source': 'booking', 'source_id': booking_id}).first()
     if existing:
         raise HTTPException(status_code=400, detail=f"Journal entry already exists: {existing.entry_number}")
 
@@ -564,10 +566,12 @@ def generate_expense_journal(expense_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Expense not found")
 
     # Check if journal already exists
-    existing = db.query(JournalEntry).filter(
-        JournalEntry.source == 'expense',
-        JournalEntry.source_id == expense_id
-    ).first()
+    existing = db.execute(text('''
+        SELECT id, entry_number FROM journal_entries
+        WHERE source = :source
+        AND source_id = :source_id
+        LIMIT 1
+    '''), {'source': 'expense', 'source_id': expense_id}).first()
     if existing:
         raise HTTPException(status_code=400, detail=f"Journal entry already exists: {existing.entry_number}")
 
