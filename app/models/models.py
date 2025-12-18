@@ -313,3 +313,93 @@ class TenancyDocument(Base):
 
     # Relationships
     tenancy = relationship("Tenancy", back_populates="documents")
+
+
+# ============================================================================
+# ACCOUNTING MODELS
+# ============================================================================
+
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(20), unique=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    account_type = Column(String(20), nullable=False)  # asset/liability/equity/revenue/expense
+    parent_code = Column(String(20))
+
+    is_system = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    allow_manual_entries = Column(Boolean, default=True)
+    default_vat_treatment = Column(String(20), default='out_of_scope')
+
+    description = Column(Text)
+    display_order = Column(Integer, default=0)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    journal_lines = relationship("JournalLine", back_populates="account")
+
+
+class JournalEntry(Base):
+    __tablename__ = "journal_entries"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entry_number = Column(String(50), unique=True, nullable=False)
+    entry_date = Column(Date, nullable=False)
+
+    source = Column(String(20), nullable=False)  # booking/expense/tenancy/adjustment/manual
+    source_id = Column(UUID(as_uuid=True))
+
+    description = Column(Text, nullable=False)
+    memo = Column(Text)
+
+    is_posted = Column(Boolean, default=False)
+    is_locked = Column(Boolean, default=False)
+    is_reversed = Column(Boolean, default=False)
+    reversed_by_id = Column(UUID(as_uuid=True), ForeignKey('journal_entries.id'))
+
+    posted_at = Column(DateTime(timezone=True))
+    posted_by = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+
+    # Relationships
+    lines = relationship("JournalLine", back_populates="journal_entry", cascade="all, delete-orphan")
+    reversed_by = relationship("JournalEntry", remote_side=[id], backref="reversal_of")
+
+
+class JournalLine(Base):
+    __tablename__ = "journal_lines"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    journal_entry_id = Column(UUID(as_uuid=True), ForeignKey('journal_entries.id', ondelete='CASCADE'), nullable=False)
+
+    account_id = Column(UUID(as_uuid=True), ForeignKey('accounts.id'), nullable=False)
+
+    debit = Column(Numeric(14, 2), default=0)
+    credit = Column(Numeric(14, 2), default=0)
+
+    property_id = Column(UUID(as_uuid=True), ForeignKey('properties.id'))
+    booking_id = Column(UUID(as_uuid=True), ForeignKey('bookings.id'))
+    expense_id = Column(UUID(as_uuid=True), ForeignKey('expenses.id'))
+    tenancy_id = Column(UUID(as_uuid=True), ForeignKey('tenancies.id'))
+
+    vat_treatment = Column(String(20), default='out_of_scope')
+    vat_amount = Column(Numeric(10, 2), default=0)
+
+    description = Column(Text)
+    line_order = Column(Integer, default=0)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    journal_entry = relationship("JournalEntry", back_populates="lines")
+    account = relationship("Account", back_populates="journal_lines")
+    property = relationship("Property")
+    booking = relationship("Booking")
+    expense = relationship("Expense")
+    tenancy = relationship("Tenancy")
