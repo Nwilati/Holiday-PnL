@@ -484,11 +484,11 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail=f"Journal entry already exists: {existing.entry_number}")
 
-    # Get accounts
-    acc_receivable = get_account_by_code(db, '1200')  # Accounts Receivable
-    acc_revenue = get_account_by_code(db, '4120')     # Short-Term Rental Revenue
-    acc_cleaning_rev = get_account_by_code(db, '4220')  # Cleaning Fee Income
-    acc_commission = get_account_by_code(db, '5310')  # Platform Commissions
+    # Get accounts (matching seeded COA)
+    acc_receivable = get_account_by_code(db, '1201')   # OTA Receivables
+    acc_revenue = get_account_by_code(db, '4101')      # Nightly Rate Revenue
+    acc_cleaning_rev = get_account_by_code(db, '4102') # Cleaning Fee Revenue
+    acc_commission = get_account_by_code(db, '5101')   # Airbnb Commission
 
     lines = []
 
