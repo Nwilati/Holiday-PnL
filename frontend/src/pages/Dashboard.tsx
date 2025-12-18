@@ -312,15 +312,15 @@ export default function Dashboard() {
 
   // Combined revenue (short-term + annual cleared)
   const getCombinedRevenue = () => {
-    const shortTerm = kpis?.total_revenue || 0;
-    const annual = annualRevenue?.total_cleared || 0;
+    const shortTerm = Number(kpis?.total_revenue) || 0;
+    const annual = Number(annualRevenue?.total_cleared) || 0;
     return shortTerm + annual;
   };
 
   // Combined NOI
   const getCombinedNOI = () => {
-    const shortTermNOI = kpis?.noi || 0;
-    const annualCleared = annualRevenue?.total_cleared || 0;
+    const shortTermNOI = Number(kpis?.noi) || 0;
+    const annualCleared = Number(annualRevenue?.total_cleared) || 0;
     return shortTermNOI + annualCleared;
   };
 
@@ -453,13 +453,13 @@ export default function Dashboard() {
   const kpiCards = [
     {
       label: 'Short-Term Revenue',
-      value: formatCurrency(kpis?.total_revenue || 0),
+      value: formatCurrency(Number(kpis?.total_revenue) || 0),
       icon: DollarSign,
       color: 'bg-gradient-to-br from-emerald-400 to-emerald-600',
     },
     {
       label: 'Annual Tenancy (Cleared)',
-      value: formatCurrency(annualRevenue?.total_cleared || 0),
+      value: formatCurrency(Number(annualRevenue?.total_cleared) || 0),
       icon: Home,
       color: 'bg-gradient-to-br from-blue-400 to-blue-600',
     },
@@ -471,7 +471,7 @@ export default function Dashboard() {
     },
     {
       label: 'Total Expenses',
-      value: formatCurrency(kpis?.total_expenses || 0),
+      value: formatCurrency(Number(kpis?.total_expenses) || 0),
       icon: Wallet,
       color: 'bg-gradient-to-br from-rose-400 to-rose-600',
     },
@@ -483,7 +483,7 @@ export default function Dashboard() {
     },
     {
       label: 'Active Tenancies',
-      value: String(annualRevenue?.active_tenancies || 0),
+      value: String(Number(annualRevenue?.active_tenancies) || 0),
       icon: Calendar,
       color: 'bg-gradient-to-br from-amber-400 to-amber-600',
     },
@@ -568,27 +568,29 @@ export default function Dashboard() {
               </ResponsiveContainer>
               <p className="text-sm font-medium text-stone-600 mt-1">
                 {(() => {
-                  const total = annualRevenue.total_cleared + annualRevenue.total_pending;
-                  const collectedPercent = total > 0 ? (annualRevenue.total_cleared / total) * 100 : 0;
+                  const cleared = Number(annualRevenue.total_cleared) || 0;
+                  const pending = Number(annualRevenue.total_pending) || 0;
+                  const total = cleared + pending;
+                  const collectedPercent = total > 0 ? (cleared / total) * 100 : 0;
                   return `${collectedPercent.toFixed(1)}% Collected`;
                 })()}
               </p>
             </div>
             <div className="p-4 bg-emerald-50 rounded-xl">
               <p className="text-sm text-emerald-600 font-medium">Cleared Cheques</p>
-              <p className="text-xl font-bold text-emerald-700">{formatCurrency(annualRevenue.total_cleared)}</p>
+              <p className="text-xl font-bold text-emerald-700">{formatCurrency(Number(annualRevenue.total_cleared) || 0)}</p>
             </div>
             <div className="p-4 bg-amber-50 rounded-xl">
               <p className="text-sm text-amber-600 font-medium">Pending Cheques</p>
-              <p className="text-xl font-bold text-amber-700">{formatCurrency(annualRevenue.total_pending)}</p>
+              <p className="text-xl font-bold text-amber-700">{formatCurrency(Number(annualRevenue.total_pending) || 0)}</p>
             </div>
             <div className="p-4 bg-blue-50 rounded-xl">
               <p className="text-sm text-blue-600 font-medium">Total Contract Value</p>
-              <p className="text-xl font-bold text-blue-700">{formatCurrency(annualRevenue.total_contract_value)}</p>
+              <p className="text-xl font-bold text-blue-700">{formatCurrency(Number(annualRevenue.total_contract_value) || 0)}</p>
             </div>
             <div className="p-4 bg-purple-50 rounded-xl">
               <p className="text-sm text-purple-600 font-medium">Active Tenancies</p>
-              <p className="text-xl font-bold text-purple-700">{annualRevenue.active_tenancies}</p>
+              <p className="text-xl font-bold text-purple-700">{Number(annualRevenue.active_tenancies) || 0}</p>
             </div>
           </div>
         </div>
