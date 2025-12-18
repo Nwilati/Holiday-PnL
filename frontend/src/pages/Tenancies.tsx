@@ -272,13 +272,28 @@ export default function Tenancies() {
   };
 
   const handleSubmitForm = async () => {
+    // Validate property_id is set
+    if (!formData.property_id) {
+      alert('Please select a property');
+      return;
+    }
+
     try {
+      // Build payload with correct types - don't spread formData to avoid extra fields
       const payload = {
-        ...formData,
+        property_id: formData.property_id,
+        tenant_name: formData.tenant_name,
+        tenant_email: formData.tenant_email,
+        tenant_phone: formData.tenant_phone,
+        contract_start: formData.contract_start,
+        contract_end: formData.contract_end,
         annual_rent: Number(formData.annual_rent),
         contract_value: Number(formData.contract_value),
         security_deposit: Number(formData.security_deposit),
         num_cheques: Number(formData.num_cheques) as 1 | 2 | 3 | 4 | 6 | 12,
+        ejari_number: formData.ejari_number || null,
+        notes: formData.notes || null,
+        auto_split_cheques: formData.auto_split_cheques,
       };
 
       if (selectedTenancy) {
