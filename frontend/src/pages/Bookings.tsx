@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Trash2, MoreHorizontal, Check, Minus, X } from 'lucide-react';
+import { Plus, Search, Trash2, X } from 'lucide-react';
 import { api } from '../api/client';
 
 type Property = { id: string; name: string; };
