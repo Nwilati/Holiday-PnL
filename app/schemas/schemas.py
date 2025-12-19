@@ -60,6 +60,7 @@ class PropertyBase(BaseModel):
     max_guests: int = 2
     size_sqft: Optional[int] = None
     unit_type: Optional[str] = "standard"  # 'standard' or 'deluxe'
+    rental_mode: Optional[str] = "short_term"  # 'short_term' or 'annual'
     dtcm_license: Optional[str] = None
     dtcm_expiry: Optional[date] = None
     ejari_number: Optional[str] = None
@@ -83,6 +84,7 @@ class PropertyUpdate(BaseModel):
     max_guests: Optional[int] = None
     size_sqft: Optional[int] = None
     unit_type: Optional[str] = None
+    rental_mode: Optional[str] = None
     dtcm_license: Optional[str] = None
     dtcm_expiry: Optional[date] = None
     ejari_number: Optional[str] = None

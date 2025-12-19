@@ -48,6 +48,13 @@ def create_booking(booking_data: BookingCreate, db: Session = Depends(get_db)):
     if not property:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
 
+    # Check rental mode - cannot create short-term booking for annual rental property
+    if property.rental_mode == 'annual':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot create short-term booking for annual rental property"
+        )
+
     # Validate channel exists
     channel = db.query(Channel).filter(Channel.id == booking_data.channel_id).first()
     if not channel:

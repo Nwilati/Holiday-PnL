@@ -13,6 +13,7 @@ type Property = {
   bathrooms: number;
   max_guests: number;
   unit_type: string;
+  rental_mode: string;
   is_active: boolean;
 };
 
@@ -120,7 +121,14 @@ export default function Properties() {
                   </button>
                 </div>
               </div>
-              <h3 className="text-sm font-medium text-stone-800 mb-2">{property.name}</h3>
+              <h3 className="text-sm font-medium text-stone-800 mb-1">{property.name}</h3>
+              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium mb-2 ${
+                property.rental_mode === 'annual'
+                  ? 'bg-purple-50 text-purple-700'
+                  : 'bg-sky-50 text-sky-700'
+              }`}>
+                {property.rental_mode === 'annual' ? 'Annual' : 'Short-term'}
+              </span>
               <div className="space-y-1.5 text-xs text-stone-500">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-3.5 h-3.5" />
@@ -173,6 +181,7 @@ function PropertyForm({ property, onClose, onSave }: PropertyFormProps) {
     bathrooms: property?.bathrooms || 1,
     max_guests: property?.max_guests || 2,
     unit_type: property?.unit_type || 'standard',
+    rental_mode: property?.rental_mode || 'short_term',
   });
   const [saving, setSaving] = useState(false);
 
@@ -295,16 +304,30 @@ function PropertyForm({ property, onClose, onSave }: PropertyFormProps) {
               />
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Unit Type (Tourism Dirham Rate)</label>
-            <select
-              value={formData.unit_type}
-              onChange={(e) => setFormData({ ...formData, unit_type: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-stone-200 rounded focus:outline-none focus:border-sky-500"
-            >
-              <option value="standard">Standard (AED 10/bedroom/night)</option>
-              <option value="deluxe">Deluxe (AED 15/bedroom/night)</option>
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-stone-600 mb-1">Rental Mode</label>
+              <select
+                value={formData.rental_mode}
+                onChange={(e) => setFormData({ ...formData, rental_mode: e.target.value })}
+                className="w-full px-3 py-2 text-sm border border-stone-200 rounded focus:outline-none focus:border-sky-500"
+              >
+                <option value="short_term">Short-term (Holiday Home)</option>
+                <option value="annual">Annual Rental</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-stone-600 mb-1">Unit Type (Tourism Dirham)</label>
+              <select
+                value={formData.unit_type}
+                onChange={(e) => setFormData({ ...formData, unit_type: e.target.value })}
+                className="w-full px-3 py-2 text-sm border border-stone-200 rounded focus:outline-none focus:border-sky-500"
+                disabled={formData.rental_mode === 'annual'}
+              >
+                <option value="standard">Standard (AED 10/night)</option>
+                <option value="deluxe">Deluxe (AED 15/night)</option>
+              </select>
+            </div>
           </div>
         </form>
 

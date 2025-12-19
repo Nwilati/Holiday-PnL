@@ -86,8 +86,11 @@ async def get_tourism_dirham_report(
     """
     results = []
 
-    # Get all active properties
-    properties_query = db.query(Property).filter(Property.is_active == True)
+    # Get all active short-term rental properties (only short-term are subject to DTCM)
+    properties_query = db.query(Property).filter(
+        Property.is_active == True,
+        Property.rental_mode == 'short_term'
+    )
     if property_id:
         properties_query = properties_query.filter(Property.id == property_id)
     properties = properties_query.all()

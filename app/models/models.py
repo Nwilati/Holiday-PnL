@@ -36,6 +36,7 @@ class Property(Base):
     max_guests = Column(Integer, nullable=False, default=2)
     size_sqft = Column(Integer)
     unit_type = Column(String(20), default='standard')
+    rental_mode = Column(String(20), default='short_term')  # 'short_term' or 'annual'
     dtcm_license = Column(String(100))
     dtcm_expiry = Column(Date)
     ejari_number = Column(String(100))

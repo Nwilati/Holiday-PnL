@@ -158,6 +158,13 @@ def create_tenancy(tenancy_data: TenancyCreate, db: Session = Depends(get_db)):
     if not property_obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
 
+    # Check rental mode - cannot create annual tenancy for short-term rental property
+    if property_obj.rental_mode == 'short_term':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot create annual tenancy for short-term rental property. Change property rental mode first."
+        )
+
     # Validate dates
     if tenancy_data.contract_end <= tenancy_data.contract_start:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contract end must be after start")
