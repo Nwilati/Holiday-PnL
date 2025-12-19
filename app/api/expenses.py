@@ -7,6 +7,7 @@ from datetime import date
 from app.core.database import get_db
 from app.models.models import Expense, Property, ExpenseCategory
 from app.schemas.schemas import ExpenseCreate, ExpenseUpdate, ExpenseResponse
+from app.api.accounting import generate_expense_journal
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
@@ -98,6 +99,13 @@ def create_expense(expense_data: ExpenseCreate, db: Session = Depends(get_db)):
     db.commit()
 
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
+
+    # Auto-generate journal entry
+    try:
+        generate_expense_journal(expense_id=expense.id, db=db)
+    except Exception as e:
+        print(f"Warning: Could not auto-generate journal for expense: {e}")
+
     return expense
 
 @router.get("/{expense_id}", response_model=ExpenseResponse)

@@ -7,6 +7,7 @@ from datetime import date
 from app.core.database import get_db
 from app.models.models import Booking, Property, Channel
 from app.schemas.schemas import BookingCreate, BookingUpdate, BookingResponse
+from app.api.accounting import generate_booking_journal
 
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
 
@@ -138,6 +139,13 @@ def create_booking(booking_data: BookingCreate, db: Session = Depends(get_db)):
 
     # Fetch the created booking
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
+
+    # Auto-generate journal entry
+    try:
+        generate_booking_journal(booking_id=booking.id, db=db)
+    except Exception as e:
+        print(f"Warning: Could not auto-generate journal for booking: {e}")
+
     return booking
 
 @router.get("/{booking_id}", response_model=BookingResponse)
@@ -158,6 +166,11 @@ def update_booking(booking_id: UUID, booking_data: BookingUpdate, db: Session = 
 
     update_data = booking_data.model_dump(exclude_unset=True)
 
+    # Track if key financial fields changed (for journal regeneration)
+    financial_fields = {'nightly_rate', 'subtotal_accommodation', 'cleaning_fee', 'extra_guest_fee',
+                        'other_fees', 'discount_amount', 'platform_commission', 'check_in', 'check_out'}
+    financial_changed = any(field in update_data for field in financial_fields)
+
     # Build dynamic update SQL
     set_clauses = []
     params = {'id': booking_id}
@@ -177,6 +190,20 @@ def update_booking(booking_id: UUID, booking_data: BookingUpdate, db: Session = 
         db.commit()
 
     db.refresh(booking)
+
+    # Regenerate journal entry if financial fields changed
+    if financial_changed:
+        try:
+            # Delete existing unposted journal first
+            db.execute(text('''
+                DELETE FROM journal_entries
+                WHERE source = :source AND source_id = :source_id AND is_posted = FALSE
+            '''), {'source': 'booking', 'source_id': booking_id})
+            db.commit()
+            generate_booking_journal(booking_id=booking.id, db=db)
+        except Exception as e:
+            print(f"Warning: Could not regenerate journal for booking: {e}")
+
     return booking
 
 @router.delete("/{booking_id}", status_code=status.HTTP_204_NO_CONTENT)
