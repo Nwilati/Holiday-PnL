@@ -7,7 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from app.core.database import get_db
-from app.models.models import Account, JournalEntry, JournalLine, Booking, Expense, Property, Channel
+from app.models.models import Account, JournalEntry, JournalLine, Booking, Expense, ExpenseCategory, Property, Channel
 from app.schemas.accounting_schemas import (
     AccountCreate, AccountUpdate, AccountResponse,
     JournalEntryCreate, JournalEntryUpdate, JournalEntryResponse,
@@ -68,6 +68,80 @@ def calculate_tourism_dirham(property: Property, nights: int) -> Decimal:
         rate = Decimal('10.00')
 
     return Decimal(bedrooms) * Decimal(nights) * rate
+
+
+# Expense category to GL account mapping
+EXPENSE_CATEGORY_TO_ACCOUNT = {
+    # Utilities
+    'DEWA': '5301',
+    'Utilities': '5301',
+    'Electricity': '5301',
+    'Water': '5301',
+    'District Cooling': '5302',
+    'Empower': '5302',
+    'Internet': '5303',
+    'DU': '5303',
+    'Etisalat': '5303',
+    'Gas': '5304',
+
+    # Property Operations
+    'Cleaning': '5201',
+    'Laundry': '5202',
+    'Supplies': '5203',
+    'Consumables': '5203',
+
+    # Maintenance
+    'Maintenance': '5401',
+    'Repairs': '5401',
+    'AC Maintenance': '5402',
+    'AC': '5402',
+    'Plumbing': '5403',
+    'Electrical': '5404',
+
+    # Property Costs
+    'Service Charges': '5501',
+    'Insurance': '5502',
+    'DTCM License/Permit': '5503',
+    'DTCM': '5503',
+    'License': '5503',
+    'Management Fee': '5504',
+
+    # Platform Fees
+    'Platform Commission': '5101',
+    'Airbnb Commission': '5101',
+    'Booking.com Commission': '5102',
+    'Payment Processing': '5103',
+
+    # Government
+    'Tourism Dirham': '5601',
+    'Municipality Fee': '5602',
+
+    # Bank
+    'Bank Charges': '5700',
+    'Bank Fees': '5700',
+
+    # Operating Expenses (generic)
+    'Operating Expenses': '5800',
+    'Other': '5800',
+}
+
+
+def get_expense_account_code(category: str) -> str:
+    """Map expense category to GL account code"""
+    if not category:
+        return '5800'  # Default to Other Expenses
+
+    # Try exact match first
+    if category in EXPENSE_CATEGORY_TO_ACCOUNT:
+        return EXPENSE_CATEGORY_TO_ACCOUNT[category]
+
+    # Try partial match (case-insensitive)
+    category_lower = category.lower()
+    for key, code in EXPENSE_CATEGORY_TO_ACCOUNT.items():
+        if key.lower() in category_lower or category_lower in key.lower():
+            return code
+
+    return '5800'  # Default to Other Expenses
 
 
 # ============================================================================
@@ -628,8 +702,21 @@ def generate_expense_journal(expense_id: UUID, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail=f"Journal entry already exists: {existing.entry_number}")
 
-    # Default accounts
-    acc_expense = get_account_by_code(db, '5100')     # Operating Expenses
+    # Get expense category name for account mapping
+    category_name = None
+    if expense.category_id:
+        category = db.query(ExpenseCategory).filter(ExpenseCategory.id == expense.category_id).first()
+        if category:
+            category_name = category.name
+
+    # Get correct expense account based on category
+    account_code = get_expense_account_code(category_name)
+    try:
+        acc_expense = get_account_by_code(db, account_code)
+    except HTTPException:
+        # Fall back to generic operating expenses if mapped account doesn't exist
+        acc_expense = get_account_by_code(db, '5800')
+
     acc_payable = get_account_by_code(db, '2100')     # Accounts Payable
 
     amount = Decimal(str(expense.amount or 0))
