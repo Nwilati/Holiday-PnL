@@ -7,7 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from app.core.database import get_db
-from app.models.models import Account, JournalEntry, JournalLine, Booking, Expense, Property
+from app.models.models import Account, JournalEntry, JournalLine, Booking, Expense, Property, Channel
 from app.schemas.accounting_schemas import (
     AccountCreate, AccountUpdate, AccountResponse,
     JournalEntryCreate, JournalEntryUpdate, JournalEntryResponse,
@@ -474,6 +474,13 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
+    # Get channel name
+    channel_name = "Direct"
+    if booking.channel_id:
+        channel = db.query(Channel).filter(Channel.id == booking.channel_id).first()
+        if channel:
+            channel_name = channel.name
+
     # Check if journal already exists
     existing = db.execute(text('''
         SELECT id, entry_number FROM journal_entries
@@ -551,7 +558,7 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
         entry_date=booking.check_in,
         source='booking',
         source_id=booking_id,
-        description=f"Booking: {booking.guest_name} ({booking.check_in} to {booking.check_out})",
+        description=f"{channel_name}: {booking.guest_name} ({booking.check_in} to {booking.check_out})",
         lines=lines
     )
 
