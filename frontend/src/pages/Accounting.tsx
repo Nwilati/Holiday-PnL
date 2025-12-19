@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   BookOpen, Search,
-  FileText, CheckCircle, XCircle, RotateCcw, Eye
+  FileText, CheckCircle, XCircle, RotateCcw, Eye, X
 } from 'lucide-react';
 import api from '../api/client';
 
@@ -445,67 +445,90 @@ export default function Accounting() {
       {/* Journal Detail Modal */}
       {selectedJournal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-stone-200 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-stone-800">{selectedJournal.entry_number}</h2>
-                <p className="text-stone-500">{selectedJournal.entry_date}</p>
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl">
+            {/* Header */}
+            <div className="p-6 border-b border-stone-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-stone-800">{selectedJournal.entry_number}</h2>
+                  <p className="text-sm text-stone-500 mt-1">{selectedJournal.entry_date}</p>
+                </div>
+                <button
+                  onClick={() => setSelectedJournal(null)}
+                  className="p-2 hover:bg-stone-100 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5 text-stone-500" />
+                </button>
               </div>
-              <button onClick={() => setSelectedJournal(null)} className="text-stone-400 hover:text-stone-600">
-                <XCircle className="w-6 h-6" />
-              </button>
             </div>
+
+            {/* Content */}
             <div className="p-6">
-              <div className="mb-4">
-                <span className={`px-2 py-1 rounded text-sm ${sourceColors[selectedJournal.source]}`}>
-                  {selectedJournal.source}
+              {/* Status badges */}
+              <div className="flex items-center gap-2 mb-4">
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${sourceColors[selectedJournal.source]}`}>
+                  {selectedJournal.source.toUpperCase()}
                 </span>
                 {selectedJournal.is_posted && (
-                  <span className="ml-2 px-2 py-1 rounded text-sm bg-emerald-100 text-emerald-700">Posted</span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">POSTED</span>
                 )}
                 {selectedJournal.is_reversed && (
-                  <span className="ml-2 px-2 py-1 rounded text-sm bg-red-100 text-red-700">Reversed</span>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">REVERSED</span>
                 )}
               </div>
-              <p className="text-stone-700 mb-4">{selectedJournal.description}</p>
-              {selectedJournal.memo && (
-                <p className="text-stone-500 text-sm mb-4 italic">{selectedJournal.memo}</p>
-              )}
 
-              <table className="w-full">
-                <thead className="bg-stone-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-stone-500">Account</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-stone-500">Description</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-stone-500">Debit</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-stone-500">Credit</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-100">
-                  {selectedJournal.lines.map(line => (
-                    <tr key={line.id}>
-                      <td className="px-3 py-2">
-                        <span className="font-mono text-xs text-stone-500">{line.account_code}</span>
-                        <span className="ml-2 text-sm text-stone-700">{line.account_name}</span>
-                      </td>
-                      <td className="px-3 py-2 text-sm text-stone-600">{line.description || '-'}</td>
-                      <td className="px-3 py-2 text-right font-mono text-sm">
-                        {parseFloat(line.debit) > 0 ? formatCurrency(line.debit) : ''}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono text-sm">
-                        {parseFloat(line.credit) > 0 ? formatCurrency(line.credit) : ''}
-                      </td>
+              {/* Description */}
+              <p className="text-stone-700 mb-6">{selectedJournal.description}</p>
+
+              {/* Journal Lines Table */}
+              <div className="border border-stone-200 rounded-xl overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-stone-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-stone-600 uppercase">Account</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-stone-600 uppercase">Description</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-stone-600 uppercase">Debit</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-stone-600 uppercase">Credit</th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-stone-100">
-                  <tr>
-                    <td colSpan={2} className="px-3 py-2 font-medium">Total</td>
-                    <td className="px-3 py-2 text-right font-mono font-bold">{formatCurrency(selectedJournal.total_debit)}</td>
-                    <td className="px-3 py-2 text-right font-mono font-bold">{formatCurrency(selectedJournal.total_credit)}</td>
-                  </tr>
-                </tfoot>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {selectedJournal.lines.map(line => (
+                      <tr key={line.id} className="hover:bg-stone-50">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-stone-400 bg-stone-100 px-2 py-0.5 rounded">{line.account_code}</span>
+                            <span className="text-sm text-stone-700">{line.account_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-stone-600">{line.description || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-right font-mono text-stone-700">
+                          {parseFloat(line.debit) > 0 ? formatCurrency(line.debit) : ''}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right font-mono text-stone-700">
+                          {parseFloat(line.credit) > 0 ? formatCurrency(line.credit) : ''}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-stone-100 border-t-2 border-stone-300">
+                    <tr>
+                      <td colSpan={2} className="px-4 py-3 font-semibold text-stone-800">Total</td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-stone-800">{formatCurrency(selectedJournal.total_debit)}</td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-stone-800">{formatCurrency(selectedJournal.total_credit)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-stone-50 rounded-b-2xl flex justify-end">
+              <button
+                onClick={() => setSelectedJournal(null)}
+                className="px-4 py-2 bg-stone-200 text-stone-700 rounded-lg hover:bg-stone-300 transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
