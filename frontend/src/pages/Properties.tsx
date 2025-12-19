@@ -12,6 +12,7 @@ type Property = {
   bedrooms: number;
   bathrooms: number;
   max_guests: number;
+  unit_type: string;
   is_active: boolean;
 };
 
@@ -171,6 +172,7 @@ function PropertyForm({ property, onClose, onSave }: PropertyFormProps) {
     bedrooms: property?.bedrooms || 1,
     bathrooms: property?.bathrooms || 1,
     max_guests: property?.max_guests || 2,
+    unit_type: property?.unit_type || 'standard',
   });
   const [saving, setSaving] = useState(false);
 
@@ -292,6 +294,17 @@ function PropertyForm({ property, onClose, onSave }: PropertyFormProps) {
                 required
               />
             </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-stone-600 mb-1">Unit Type (Tourism Dirham Rate)</label>
+            <select
+              value={formData.unit_type}
+              onChange={(e) => setFormData({ ...formData, unit_type: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-stone-200 rounded focus:outline-none focus:border-sky-500"
+            >
+              <option value="standard">Standard (AED 10/bedroom/night)</option>
+              <option value="deluxe">Deluxe (AED 15/bedroom/night)</option>
+            </select>
           </div>
         </form>
 

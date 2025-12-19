@@ -52,6 +52,24 @@ def validate_journal_balance(lines: List[JournalLineCreate]) -> bool:
     return total_debit == total_credit
 
 
+def calculate_tourism_dirham(property: Property, nights: int) -> Decimal:
+    """Calculate Tourism Dirham: bedrooms × nights × rate
+
+    Rate based on unit type:
+    - Deluxe: AED 15 per bedroom per night
+    - Standard: AED 10 per bedroom per night
+    """
+    bedrooms = property.bedrooms or 1
+
+    # Rate based on unit type
+    if property.unit_type == 'deluxe':
+        rate = Decimal('15.00')
+    else:  # standard
+        rate = Decimal('10.00')
+
+    return Decimal(bedrooms) * Decimal(nights) * rate
+
+
 # ============================================================================
 # CHART OF ACCOUNTS
 # ============================================================================
@@ -474,6 +492,11 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
+    # Get property for bedroom count and unit type
+    property = db.query(Property).filter(Property.id == booking.property_id).first()
+    if not property:
+        raise HTTPException(status_code=404, detail="Property not found")
+
     # Get channel name
     channel_name = "Direct"
     if booking.channel_id:
@@ -492,10 +515,21 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"Journal entry already exists: {existing.entry_number}")
 
     # Get accounts (matching seeded COA)
-    acc_receivable = get_account_by_code(db, '1201')   # OTA Receivables
-    acc_revenue = get_account_by_code(db, '4101')      # Nightly Rate Revenue
-    acc_cleaning_rev = get_account_by_code(db, '4102') # Cleaning Fee Revenue
-    acc_commission = get_account_by_code(db, '5101')   # Airbnb Commission
+    acc_receivable = get_account_by_code(db, '1201')      # OTA Receivables
+    acc_revenue = get_account_by_code(db, '4101')         # Nightly Rate Revenue
+    acc_cleaning_rev = get_account_by_code(db, '4102')    # Cleaning Fee Revenue
+    acc_commission = get_account_by_code(db, '5101')      # Platform Commission Expense
+    acc_tourism_payable = get_account_by_code(db, '2203') # Tourism Dirham Payable
+
+    # Calculate nights
+    nights = (booking.check_out - booking.check_in).days if booking.check_out and booking.check_in else 1
+
+    # Calculate Tourism Dirham: bedrooms × nights × rate
+    tourism_dirham = calculate_tourism_dirham(property, nights)
+
+    # Update booking with calculated tourism dirham
+    booking.tourism_fee = tourism_dirham
+    db.flush()
 
     lines = []
 
@@ -507,8 +541,9 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
     # Net receivable (what we get from OTA)
     net_receivable = gross - commission
 
-    # Accommodation revenue (gross minus cleaning)
-    accommodation_rev = gross - cleaning
+    # Accommodation revenue (gross minus cleaning minus tourism dirham)
+    # Tourism dirham is a liability, not income
+    accommodation_rev = gross - cleaning - tourism_dirham
 
     # Line 1: Debit Receivable
     lines.append(JournalLineCreate(
@@ -531,7 +566,7 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
             description="Platform commission"
         ))
 
-    # Line 3: Credit Accommodation Revenue
+    # Line 3: Credit Accommodation Revenue (net of tourism dirham)
     if accommodation_rev > 0:
         lines.append(JournalLineCreate(
             account_id=acc_revenue.id,
@@ -539,7 +574,7 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
             credit=accommodation_rev,
             property_id=booking.property_id,
             booking_id=booking_id,
-            description=f"Accommodation {booking.nights or 1} nights"
+            description=f"Accommodation {nights} nights"
         ))
 
     # Line 4: Credit Cleaning Revenue
@@ -551,6 +586,17 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
             property_id=booking.property_id,
             booking_id=booking_id,
             description="Cleaning fee"
+        ))
+
+    # Line 5: Credit Tourism Dirham Payable (liability)
+    if tourism_dirham > 0:
+        lines.append(JournalLineCreate(
+            account_id=acc_tourism_payable.id,
+            debit=Decimal('0'),
+            credit=tourism_dirham,
+            property_id=booking.property_id,
+            booking_id=booking_id,
+            description=f"Tourism Dirham: {property.bedrooms or 1} BR × {nights} nights"
         ))
 
     # Create the journal entry

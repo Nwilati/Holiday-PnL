@@ -10,6 +10,7 @@ import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Tenancies from './pages/Tenancies';
 import Accounting from './pages/Accounting';
+import TaxReports from './pages/TaxReports';
 import Login from './pages/Login';
 
 // Protected Route wrapper
@@ -107,6 +108,13 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <Accounting />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/tax-reports" element={
+        <ProtectedRoute>
+          <Layout>
+            <TaxReports />
           </Layout>
         </ProtectedRoute>
       } />

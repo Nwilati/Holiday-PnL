@@ -35,6 +35,7 @@ class Property(Base):
     bathrooms = Column(Numeric(3, 1), default=1)
     max_guests = Column(Integer, nullable=False, default=2)
     size_sqft = Column(Integer)
+    unit_type = Column(String(20), default='standard')
     dtcm_license = Column(String(100))
     dtcm_expiry = Column(Date)
     ejari_number = Column(String(100))
@@ -403,3 +404,26 @@ class JournalLine(Base):
     booking = relationship("Booking")
     expense = relationship("Expense")
     tenancy = relationship("Tenancy")
+
+
+# ============================================================================
+# DTCM PAYMENT MODEL
+# ============================================================================
+
+class DTCMPayment(Base):
+    __tablename__ = "dtcm_payments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    payment_date = Column(Date, nullable=False)
+    period_month = Column(Integer, nullable=False)
+    period_year = Column(Integer, nullable=False)
+    property_id = Column(UUID(as_uuid=True), ForeignKey("properties.id"))
+    amount = Column(Numeric(10, 2), nullable=False)
+    reference = Column(String(100))
+    payment_method = Column(String(50))
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+
+    # Relationships
+    property = relationship("Property")

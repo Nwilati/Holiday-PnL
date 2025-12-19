@@ -59,6 +59,7 @@ class PropertyBase(BaseModel):
     bathrooms: Optional[Decimal] = 1
     max_guests: int = 2
     size_sqft: Optional[int] = None
+    unit_type: Optional[str] = "standard"  # 'standard' or 'deluxe'
     dtcm_license: Optional[str] = None
     dtcm_expiry: Optional[date] = None
     ejari_number: Optional[str] = None
@@ -81,6 +82,7 @@ class PropertyUpdate(BaseModel):
     bathrooms: Optional[Decimal] = None
     max_guests: Optional[int] = None
     size_sqft: Optional[int] = None
+    unit_type: Optional[str] = None
     dtcm_license: Optional[str] = None
     dtcm_expiry: Optional[date] = None
     ejari_number: Optional[str] = None
