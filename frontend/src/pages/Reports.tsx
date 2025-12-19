@@ -383,7 +383,7 @@ export default function Reports() {
           ['Active Tenancies', annualRevenue?.active_tenancies || 0],
         ],
         theme: 'striped',
-        headStyles: { fillColor: [249, 115, 22] },
+        headStyles: { fillColor: [2, 132, 199] },
       });
 
       doc.save(`Tenancy_Report_${propertyName}_${selectedYear}.pdf`);
@@ -415,7 +415,7 @@ export default function Reports() {
           `${toNum(e.percentage).toFixed(1)}%`
         ]),
         theme: 'striped',
-        headStyles: { fillColor: [220, 53, 69] },
+        headStyles: { fillColor: [185, 28, 28] },
       });
 
       doc.save(`Expense_Report_${propertyName}_${selectedYear}.pdf`);
@@ -451,7 +451,7 @@ export default function Reports() {
           ['RevPAR', formatCurrency(kpis?.revpar)],
         ],
         theme: 'striped',
-        headStyles: { fillColor: [40, 167, 69] },
+        headStyles: { fillColor: [21, 128, 61] },
       });
 
       const finalY1 = (doc as any).lastAutoTable.finalY || 60;
@@ -469,7 +469,7 @@ export default function Reports() {
           `${toNum(c.percentage).toFixed(1)}%`
         ]),
         theme: 'striped',
-        headStyles: { fillColor: [40, 167, 69] },
+        headStyles: { fillColor: [21, 128, 61] },
       });
 
       doc.save(`Revenue_Report_${propertyName}_${selectedYear}.pdf`);
@@ -504,7 +504,7 @@ export default function Reports() {
         ['RevPAR', formatCurrency(kpis?.revpar)],
       ],
       theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
+      headStyles: { fillColor: [2, 132, 199] },
     });
 
     const finalY1 = (doc as any).lastAutoTable.finalY || 60;
@@ -522,7 +522,7 @@ export default function Reports() {
         formatCurrency(m.noi)
       ]),
       theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
+      headStyles: { fillColor: [2, 132, 199] },
       styles: { fontSize: 8 },
     });
 
@@ -540,7 +540,7 @@ export default function Reports() {
         `${toNum(e.percentage).toFixed(1)}%`
       ]),
       theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
+      headStyles: { fillColor: [2, 132, 199] },
     });
 
     const finalY2 = (doc as any).lastAutoTable.finalY || 25;
@@ -558,7 +558,7 @@ export default function Reports() {
         `${toNum(c.percentage).toFixed(1)}%`
       ]),
       theme: 'striped',
-      headStyles: { fillColor: [59, 130, 246] },
+      headStyles: { fillColor: [2, 132, 199] },
     });
 
     const finalY3 = (doc as any).lastAutoTable.finalY || 25;
@@ -575,7 +575,7 @@ export default function Reports() {
         ['Active Tenancies', annualRevenue?.active_tenancies || 0],
       ],
       theme: 'striped',
-      headStyles: { fillColor: [249, 115, 22] },
+      headStyles: { fillColor: [2, 132, 199] },
     });
 
     doc.save(`PnL_Report_${propertyName}_${selectedYear}.pdf`);
@@ -584,7 +584,7 @@ export default function Reports() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="w-12 h-12 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-2 border-stone-200 border-t-sky-600 rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -592,18 +592,18 @@ export default function Reports() {
   if (properties.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
-        <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mb-6">
-          <Building2 className="w-10 h-10 text-orange-500" />
+        <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mb-4">
+          <Building2 className="w-8 h-8 text-stone-400" />
         </div>
-        <h2 className="text-2xl font-bold text-stone-800 mb-2">No Properties Yet</h2>
-        <p className="text-stone-500 mb-6 text-center max-w-md">
+        <h2 className="text-base font-semibold text-stone-800 mb-1">No Properties Yet</h2>
+        <p className="text-sm text-stone-500 mb-4 text-center max-w-md">
           Add a property first to generate reports.
         </p>
         <Link
           to="/properties"
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl font-medium shadow-lg shadow-orange-200 hover:shadow-xl transition-all duration-200"
+          className="flex items-center gap-2 px-3 py-1.5 bg-sky-600 text-white text-sm rounded hover:bg-sky-700 transition-colors"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="w-4 h-4" />
           Add Your First Property
         </Link>
       </div>
@@ -611,15 +611,15 @@ export default function Reports() {
   }
 
   return (
-    <div>
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold text-stone-800">Reports</h1>
           <select
             value={selectedProperty}
             onChange={(e) => setSelectedProperty(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-sm border border-stone-200 rounded px-2 py-1.5 focus:outline-none focus:border-sky-500"
           >
             {properties.map((property) => (
               <option key={property.id} value={property.id}>
@@ -630,7 +630,7 @@ export default function Reports() {
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-sm border border-stone-200 rounded px-2 py-1.5 focus:outline-none focus:border-sky-500"
           >
             {years.map((year) => (
               <option key={year} value={year}>
@@ -641,7 +641,7 @@ export default function Reports() {
           <select
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-sm border border-stone-200 rounded px-2 py-1.5 focus:outline-none focus:border-sky-500"
           >
             {months.map((month) => (
               <option key={month.value} value={month.value}>
@@ -652,7 +652,7 @@ export default function Reports() {
           <select
             value={reportType}
             onChange={(e) => setReportType(e.target.value as 'full' | 'expenses' | 'revenue' | 'tenancy')}
-            className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-sm border border-stone-200 rounded px-2 py-1.5 focus:outline-none focus:border-sky-500"
           >
             <option value="full">Full P&L Report</option>
             <option value="expenses">Expenses Only</option>
@@ -663,64 +663,64 @@ export default function Reports() {
         <div className="flex gap-2">
           <button
             onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            className="flex items-center gap-2 px-3 py-1.5 bg-green-700 text-white text-sm rounded hover:bg-green-800 transition-colors"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            Export Excel
+            Excel
           </button>
           <button
             onClick={exportToPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            className="flex items-center gap-2 px-3 py-1.5 bg-red-700 text-white text-sm rounded hover:bg-red-800 transition-colors"
           >
             <FileText className="w-4 h-4" />
-            Export PDF
+            PDF
           </button>
         </div>
       </div>
 
       {/* Period Badge */}
-      <div className="mb-4">
-        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+      <div>
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-sky-50 text-sky-700 border border-sky-200">
           {getReportPeriodLabel()}
         </span>
       </div>
 
       {/* KPIs Summary */}
       {(reportType === 'full' || reportType === 'revenue') && (
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">Key Performance Indicators</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <p className="text-sm text-gray-600">Short-Term Revenue</p>
-              <p className="text-xl font-bold text-blue-600">{formatCurrency(kpis?.total_revenue)}</p>
+        <div className="bg-white border border-stone-200 rounded p-4">
+          <h2 className="text-sm font-semibold text-stone-800 mb-3">Key Performance Indicators</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-3 bg-stone-50 border border-stone-200 rounded">
+              <p className="text-xs text-stone-500 mb-1">Short-Term Revenue</p>
+              <p className="text-base font-semibold text-stone-800 tabular-nums">{formatCurrency(kpis?.total_revenue)}</p>
             </div>
-            <div className="p-4 bg-orange-50 rounded-lg">
-              <p className="text-sm text-gray-600">Annual Tenancy</p>
-              <p className="text-xl font-bold text-orange-600">{formatCurrency(annualRevenue?.total_cleared)}</p>
+            <div className="p-3 bg-stone-50 border border-stone-200 rounded">
+              <p className="text-xs text-stone-500 mb-1">Annual Tenancy</p>
+              <p className="text-base font-semibold text-stone-800 tabular-nums">{formatCurrency(annualRevenue?.total_cleared)}</p>
             </div>
-            <div className="p-4 bg-emerald-50 rounded-lg">
-              <p className="text-sm text-gray-600">Combined Revenue</p>
-              <p className="text-xl font-bold text-emerald-600">{formatCurrency(getCombinedRevenue())}</p>
+            <div className="p-3 bg-green-50 border border-green-200 rounded">
+              <p className="text-xs text-green-700 mb-1">Combined Revenue</p>
+              <p className="text-base font-semibold text-green-700 tabular-nums">{formatCurrency(getCombinedRevenue())}</p>
             </div>
-            <div className="p-4 bg-green-50 rounded-lg">
-              <p className="text-sm text-gray-600">Net Revenue</p>
-              <p className="text-xl font-bold text-green-600">{formatCurrency(kpis?.net_revenue)}</p>
+            <div className="p-3 bg-stone-50 border border-stone-200 rounded">
+              <p className="text-xs text-stone-500 mb-1">Net Revenue</p>
+              <p className="text-base font-semibold text-stone-800 tabular-nums">{formatCurrency(kpis?.net_revenue)}</p>
             </div>
-            <div className="p-4 bg-red-50 rounded-lg">
-              <p className="text-sm text-gray-600">Total Expenses</p>
-              <p className="text-xl font-bold text-red-600">{formatCurrency(kpis?.total_expenses)}</p>
+            <div className="p-3 bg-red-50 border border-red-200 rounded">
+              <p className="text-xs text-red-700 mb-1">Total Expenses</p>
+              <p className="text-base font-semibold text-red-700 tabular-nums">{formatCurrency(kpis?.total_expenses)}</p>
             </div>
-            <div className="p-4 bg-purple-50 rounded-lg">
-              <p className="text-sm text-gray-600">NOI</p>
-              <p className="text-xl font-bold text-purple-600">{formatCurrency(kpis?.noi)}</p>
+            <div className="p-3 bg-stone-50 border border-stone-200 rounded">
+              <p className="text-xs text-stone-500 mb-1">NOI</p>
+              <p className="text-base font-semibold text-stone-800 tabular-nums">{formatCurrency(kpis?.noi)}</p>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600">Occupancy</p>
-              <p className="text-xl font-bold text-gray-700">{toNum(kpis?.occupancy_rate).toFixed(1)}%</p>
+            <div className="p-3 bg-stone-50 border border-stone-200 rounded">
+              <p className="text-xs text-stone-500 mb-1">Occupancy</p>
+              <p className="text-base font-semibold text-stone-800 tabular-nums">{toNum(kpis?.occupancy_rate).toFixed(1)}%</p>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600">ADR</p>
-              <p className="text-xl font-bold text-gray-700">{formatCurrency(kpis?.adr)}</p>
+            <div className="p-3 bg-stone-50 border border-stone-200 rounded">
+              <p className="text-xs text-stone-500 mb-1">ADR</p>
+              <p className="text-base font-semibold text-stone-800 tabular-nums">{formatCurrency(kpis?.adr)}</p>
             </div>
           </div>
         </div>
@@ -728,24 +728,24 @@ export default function Reports() {
 
       {/* Tenancy Revenue Section */}
       {(reportType === 'full' || reportType === 'tenancy') && annualRevenue && (
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">Annual Tenancy Revenue</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="p-4 bg-emerald-50 rounded-lg">
-              <p className="text-sm text-gray-600">Cleared Cheques</p>
-              <p className="text-xl font-bold text-emerald-600">{formatCurrency(annualRevenue.total_cleared)}</p>
+        <div className="bg-white border border-stone-200 rounded p-4">
+          <h2 className="text-sm font-semibold text-stone-800 mb-3">Annual Tenancy Revenue</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-3 bg-green-50 border border-green-200 rounded">
+              <p className="text-xs text-green-700 mb-1">Cleared Cheques</p>
+              <p className="text-base font-semibold text-green-700 tabular-nums">{formatCurrency(annualRevenue.total_cleared)}</p>
             </div>
-            <div className="p-4 bg-amber-50 rounded-lg">
-              <p className="text-sm text-gray-600">Pending Cheques</p>
-              <p className="text-xl font-bold text-amber-600">{formatCurrency(annualRevenue.total_pending)}</p>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded">
+              <p className="text-xs text-amber-700 mb-1">Pending Cheques</p>
+              <p className="text-base font-semibold text-amber-700 tabular-nums">{formatCurrency(annualRevenue.total_pending)}</p>
             </div>
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <p className="text-sm text-gray-600">Total Contract Value</p>
-              <p className="text-xl font-bold text-blue-600">{formatCurrency(annualRevenue.total_contract_value)}</p>
+            <div className="p-3 bg-stone-50 border border-stone-200 rounded">
+              <p className="text-xs text-stone-500 mb-1">Total Contract Value</p>
+              <p className="text-base font-semibold text-stone-800 tabular-nums">{formatCurrency(annualRevenue.total_contract_value)}</p>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600">Active Tenancies</p>
-              <p className="text-xl font-bold text-gray-700">{annualRevenue.active_tenancies}</p>
+            <div className="p-3 bg-stone-50 border border-stone-200 rounded">
+              <p className="text-xs text-stone-500 mb-1">Active Tenancies</p>
+              <p className="text-base font-semibold text-stone-800 tabular-nums">{annualRevenue.active_tenancies}</p>
             </div>
           </div>
         </div>
@@ -753,46 +753,48 @@ export default function Reports() {
 
       {/* Monthly P&L Table */}
       {reportType === 'full' && (
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">
-            {selectedMonth === 0 ? 'Monthly P&L Statement' : 'P&L Statement'}
-          </h2>
+        <div className="bg-white border border-stone-200 rounded">
+          <div className="px-4 py-3 border-b border-stone-200">
+            <h2 className="text-sm font-semibold text-stone-800">
+              {selectedMonth === 0 ? 'Monthly P&L Statement' : 'P&L Statement'}
+            </h2>
+          </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-4">Month</th>
-                  <th className="text-right py-3 px-4">Gross Revenue</th>
-                  <th className="text-right py-3 px-4">Net Revenue</th>
-                  <th className="text-right py-3 px-4">Expenses</th>
-                  <th className="text-right py-3 px-4">NOI</th>
+                <tr className="bg-stone-50 border-b border-stone-200">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Month</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium text-stone-500 uppercase tracking-wide">Gross Revenue</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium text-stone-500 uppercase tracking-wide">Net Revenue</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium text-stone-500 uppercase tracking-wide">Expenses</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium text-stone-500 uppercase tracking-wide">NOI</th>
                 </tr>
               </thead>
               <tbody>
                 {monthlyData.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-gray-500">
+                    <td colSpan={5} className="py-8 text-center text-sm text-stone-500">
                       No data for this period
                     </td>
                   </tr>
                 ) : (
                   <>
                     {monthlyData.map((row, index) => (
-                      <tr key={index} className="border-b hover:bg-gray-50">
-                        <td className="py-3 px-4 font-medium">{row.month}</td>
-                        <td className="text-right py-3 px-4">{formatCurrency(row.gross_revenue)}</td>
-                        <td className="text-right py-3 px-4">{formatCurrency(row.net_revenue)}</td>
-                        <td className="text-right py-3 px-4 text-red-600">{formatCurrency(row.expenses)}</td>
-                        <td className="text-right py-3 px-4 font-semibold">{formatCurrency(row.noi)}</td>
+                      <tr key={index} className="border-b border-stone-100 hover:bg-stone-50">
+                        <td className="px-4 py-2.5 text-sm font-medium text-stone-800">{row.month}</td>
+                        <td className="px-4 py-2.5 text-sm text-right text-stone-600 tabular-nums">{formatCurrency(row.gross_revenue)}</td>
+                        <td className="px-4 py-2.5 text-sm text-right text-stone-600 tabular-nums">{formatCurrency(row.net_revenue)}</td>
+                        <td className="px-4 py-2.5 text-sm text-right text-red-600 tabular-nums">{formatCurrency(row.expenses)}</td>
+                        <td className="px-4 py-2.5 text-sm text-right font-medium text-stone-800 tabular-nums">{formatCurrency(row.noi)}</td>
                       </tr>
                     ))}
                     {monthlyData.length > 1 && (
-                      <tr className="bg-gray-100 font-bold">
-                        <td className="py-3 px-4">TOTAL</td>
-                        <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.gross_revenue), 0))}</td>
-                        <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.net_revenue), 0))}</td>
-                        <td className="text-right py-3 px-4 text-red-600">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.expenses), 0))}</td>
-                        <td className="text-right py-3 px-4">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.noi), 0))}</td>
+                      <tr className="bg-stone-100 font-medium">
+                        <td className="px-4 py-2.5 text-sm text-stone-800">TOTAL</td>
+                        <td className="px-4 py-2.5 text-sm text-right text-stone-800 tabular-nums">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.gross_revenue), 0))}</td>
+                        <td className="px-4 py-2.5 text-sm text-right text-stone-800 tabular-nums">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.net_revenue), 0))}</td>
+                        <td className="px-4 py-2.5 text-sm text-right text-red-600 tabular-nums">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.expenses), 0))}</td>
+                        <td className="px-4 py-2.5 text-sm text-right text-stone-800 tabular-nums">{formatCurrency(monthlyData.reduce((sum, m) => sum + toNum(m.noi), 0))}</td>
                       </tr>
                     )}
                   </>
@@ -804,24 +806,28 @@ export default function Reports() {
       )}
 
       {/* Two Column Layout */}
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid md:grid-cols-2 gap-4">
         {/* Expense Breakdown */}
         {(reportType === 'full' || reportType === 'expenses') && (
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-4">Expense Breakdown</h2>
-            <div className="space-y-2">
+          <div className="bg-white border border-stone-200 rounded">
+            <div className="px-4 py-3 border-b border-stone-200">
+              <h2 className="text-sm font-semibold text-stone-800">Expense Breakdown</h2>
+            </div>
+            <div className="p-4">
               {expenseBreakdown.length === 0 ? (
-                <p className="text-gray-500">No expenses for this period</p>
+                <p className="text-sm text-stone-500">No expenses for this period</p>
               ) : (
-                expenseBreakdown.map((expense, index) => (
-                  <div key={index} className="flex items-center justify-between py-2 border-b">
-                    <span className="text-gray-700">{expense.category_name}</span>
-                    <div className="text-right">
-                      <span className="font-medium">{formatCurrency(expense.amount)}</span>
-                      <span className="text-gray-500 text-sm ml-2">({toNum(expense.percentage).toFixed(1)}%)</span>
+                <div className="space-y-2">
+                  {expenseBreakdown.map((expense, index) => (
+                    <div key={index} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
+                      <span className="text-sm text-stone-700">{expense.category_name}</span>
+                      <div className="text-right">
+                        <span className="text-sm font-medium text-stone-800 tabular-nums">{formatCurrency(expense.amount)}</span>
+                        <span className="text-xs text-stone-500 ml-2 tabular-nums">({toNum(expense.percentage).toFixed(1)}%)</span>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -829,24 +835,28 @@ export default function Reports() {
 
         {/* Channel Performance */}
         {(reportType === 'full' || reportType === 'revenue') && (
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-4">Channel Performance</h2>
-            <div className="space-y-2">
+          <div className="bg-white border border-stone-200 rounded">
+            <div className="px-4 py-3 border-b border-stone-200">
+              <h2 className="text-sm font-semibold text-stone-800">Channel Performance</h2>
+            </div>
+            <div className="p-4">
               {channelMix.length === 0 ? (
-                <p className="text-gray-500">No bookings for this period</p>
+                <p className="text-sm text-stone-500">No bookings for this period</p>
               ) : (
-                channelMix.map((channel, index) => (
-                  <div key={index} className="flex items-center justify-between py-2 border-b">
-                    <div>
-                      <span className="text-gray-700">{channel.channel_name}</span>
-                      <span className="text-gray-500 text-sm ml-2">({channel.bookings} bookings)</span>
+                <div className="space-y-2">
+                  {channelMix.map((channel, index) => (
+                    <div key={index} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
+                      <div>
+                        <span className="text-sm text-stone-700">{channel.channel_name}</span>
+                        <span className="text-xs text-stone-500 ml-2 tabular-nums">({channel.bookings} bookings)</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-medium text-stone-800 tabular-nums">{formatCurrency(channel.revenue)}</span>
+                        <span className="text-xs text-stone-500 ml-2 tabular-nums">({toNum(channel.percentage).toFixed(1)}%)</span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="font-medium">{formatCurrency(channel.revenue)}</span>
-                      <span className="text-gray-500 text-sm ml-2">({toNum(channel.percentage).toFixed(1)}%)</span>
-                    </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </div>
           </div>

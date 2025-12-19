@@ -9,7 +9,6 @@ import {
   BarChart3,
   Users,
   Calendar,
-  Home,
   FileText,
   BookOpen,
 } from 'lucide-react';
@@ -43,69 +42,60 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-stone-50 to-orange-50">
-      {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-stone-200 flex flex-col z-50">
-        {/* Logo */}
-        <div className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-200">
-              <Home className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="font-bold text-stone-800 text-lg">Holiday P&L</h1>
-              <p className="text-xs text-stone-400">Property Manager</p>
-            </div>
-          </div>
+    <div className="min-h-screen flex">
+      {/* Sidebar - compact and enterprise */}
+      <aside className="w-56 bg-white border-r border-stone-200 flex flex-col h-screen fixed">
+        {/* Logo area - compact */}
+        <div className="h-14 px-4 flex items-center border-b border-stone-200">
+          <span className="font-semibold text-stone-800 text-sm">Holiday P&L</span>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-4 space-y-1">
+        {/* Navigation - dense */}
+        <nav className="flex-1 py-2 overflow-y-auto">
           {navigation.map((item) => {
             const isActive = location.pathname === item.href;
             return (
               <Link
                 key={item.name}
                 to={item.href}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
+                className={`flex items-center gap-3 px-4 py-2 text-sm transition-colors ${
                   isActive
-                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-200'
-                    : 'text-stone-600 hover:bg-stone-100'
+                    ? 'bg-sky-50 text-sky-700 border-r-2 border-sky-700'
+                    : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'
                 }`}
               >
-                <item.icon className="w-5 h-5" />
-                {item.name}
+                <item.icon className="w-4 h-4" />
+                <span>{item.name}</span>
               </Link>
             );
           })}
         </nav>
 
-        {/* User section */}
-        <div className="p-4 border-t border-stone-200">
-          <div className="flex items-center gap-3 px-2 mb-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+        {/* User area - minimal */}
+        <div className="p-3 border-t border-stone-200">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded bg-stone-200 flex items-center justify-center text-xs font-medium text-stone-600">
               {getInitials(user?.full_name, user?.email)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-stone-800 text-sm truncate">
+              <p className="text-sm font-medium text-stone-800 truncate">
                 {user?.full_name || 'User'}
               </p>
-              <p className="text-xs text-stone-400 truncate">{user?.email}</p>
             </div>
+            <button
+              onClick={logout}
+              className="p-1.5 text-stone-400 hover:text-stone-600 transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={logout}
-            className="w-full flex items-center gap-2 px-4 py-2.5 text-stone-500 hover:bg-stone-100 rounded-xl transition-all duration-200"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="text-sm font-medium">Sign out</span>
-          </button>
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="ml-64 min-h-screen">
-        <div className="p-8">
+      {/* Main content area */}
+      <main className="flex-1 ml-56 overflow-auto bg-[#f5f6f7] min-h-screen">
+        <div className="p-6">
           {children}
         </div>
       </main>

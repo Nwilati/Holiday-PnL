@@ -45,81 +45,79 @@ export default function Users() {
 
   const getRoleBadge = (role: string) => {
     const styles: Record<string, string> = {
-      owner: 'bg-purple-100 text-purple-800',
-      admin: 'bg-blue-100 text-blue-800',
-      viewer: 'bg-gray-100 text-gray-800',
+      owner: 'bg-sky-50 text-sky-700 border border-sky-200',
+      admin: 'bg-stone-100 text-stone-700 border border-stone-200',
+      viewer: 'bg-stone-50 text-stone-600 border border-stone-200',
     };
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[role] || styles.viewer}`}>
+      <span className={`px-2 py-0.5 rounded text-xs font-medium ${styles[role] || styles.viewer}`}>
         {role}
       </span>
     );
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading...</div>;
+    return <div className="flex items-center justify-center h-64 text-stone-500">Loading...</div>;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-500">{users.length} users</p>
+          <h1 className="text-lg font-semibold text-stone-800">User Management</h1>
+          <p className="text-sm text-stone-500">{users.length} users</p>
         </div>
         <button
           onClick={() => { setEditingUser(null); setShowForm(true); }}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="flex items-center gap-2 px-3 py-1.5 bg-sky-600 text-white text-sm rounded hover:bg-sky-700 transition-colors"
         >
-          <Plus className="w-5 h-5 mr-2" />
+          <Plus className="w-4 h-4" />
           Add User
         </button>
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg">{error}</div>
+        <div className="bg-red-50 text-red-700 border border-red-200 p-3 rounded text-sm">{error}</div>
       )}
 
       {/* Users Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded overflow-hidden">
         <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+          <thead>
+            <tr className="bg-stone-50 border-b border-stone-200">
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">User</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Email</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Role</th>
+              <th className="px-4 py-2.5 text-right text-xs font-medium text-stone-500 uppercase tracking-wide">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody>
             {users.map((user) => (
-              <tr key={user.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                      <span className="text-blue-600 font-medium">
+              <tr key={user.id} className="border-b border-stone-100 hover:bg-stone-50">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-stone-200 rounded flex items-center justify-center">
+                      <span className="text-stone-600 text-sm font-medium">
                         {(user.full_name || user.email)[0].toUpperCase()}
                       </span>
                     </div>
-                    <div className="ml-3">
-                      <p className="font-medium text-gray-900">{user.full_name || 'No name'}</p>
-                    </div>
+                    <p className="text-sm font-medium text-stone-800">{user.full_name || 'No name'}</p>
                   </div>
                 </td>
-                <td className="px-6 py-4 text-gray-600">{user.email}</td>
-                <td className="px-6 py-4">{getRoleBadge(user.role)}</td>
-                <td className="px-6 py-4 text-right">
+                <td className="px-4 py-3 text-sm text-stone-600">{user.email}</td>
+                <td className="px-4 py-3">{getRoleBadge(user.role)}</td>
+                <td className="px-4 py-3 text-right">
                   <button
                     onClick={() => { setEditingUser(user); setShowForm(true); }}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg mr-2"
+                    className="p-1.5 text-sky-600 hover:bg-sky-50 rounded transition-colors mr-1"
                     title="Edit"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(user)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                    className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
                     title="Delete"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -197,87 +195,90 @@ function UserForm({ user, onClose, onSave }: UserFormProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        <div className="p-6 border-b flex justify-between items-center">
-          <h2 className="text-xl font-bold">{user ? 'Edit User' : 'New User'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white rounded shadow-lg w-full max-w-md">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
+          <h2 className="text-base font-semibold text-stone-800">{user ? 'Edit User' : 'New User'}</h2>
+          <button onClick={onClose} className="p-1 text-stone-400 hover:text-stone-600 transition-colors">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">{error}</div>
+            <div className="bg-red-50 text-red-700 border border-red-200 p-2 rounded text-sm">{error}</div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <label className="block text-xs font-medium text-stone-600 mb-1">Full Name</label>
             <input
               type="text"
               value={formData.full_name}
               onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-sm border border-stone-200 rounded focus:outline-none focus:border-sky-500"
               placeholder="John Doe"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-xs font-medium text-stone-600 mb-1">Email</label>
             <input
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-sm border border-stone-200 rounded focus:outline-none focus:border-sky-500"
               placeholder="user@example.com"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password {user && <span className="text-gray-400 font-normal">(leave blank to keep current)</span>}
+            <label className="block text-xs font-medium text-stone-600 mb-1">
+              Password {user && <span className="text-stone-400 font-normal">(leave blank to keep current)</span>}
             </label>
             <input
               type="password"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              placeholder={user ? '••••••••' : 'Enter password'}
+              className="w-full px-3 py-2 text-sm border border-stone-200 rounded focus:outline-none focus:border-sky-500"
+              placeholder={user ? '' : 'Enter password'}
               required={!user}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+            <label className="block text-xs font-medium text-stone-600 mb-1">Role</label>
             <select
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-sm border border-stone-200 rounded focus:outline-none focus:border-sky-500"
             >
               <option value="viewer">Viewer - Can view data only</option>
               <option value="admin">Admin - Can manage data</option>
               <option value="owner">Owner - Full access</option>
             </select>
           </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : user ? 'Update User' : 'Create User'}
-            </button>
-          </div>
         </form>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-stone-200 bg-stone-50">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-100 rounded transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="px-3 py-1.5 text-sm bg-sky-600 text-white rounded hover:bg-sky-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? 'Saving...' : user ? 'Update User' : 'Create User'}
+          </button>
+        </div>
       </div>
     </div>
   );

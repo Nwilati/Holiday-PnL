@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Upload, FileText, Trash2, Download, X, Image, File, Eye, Paperclip } from 'lucide-react';
-import DataTable from '../components/DataTable';
+import { Plus, Upload, FileText, Trash2, Download, X, Image, File, Eye, Paperclip, Search, Check, Minus } from 'lucide-react';
 import { api } from '../api/client';
 
 type Property = { id: string; name: string; };
@@ -43,6 +42,7 @@ export default function Expenses() {
   const [filters, setFilters] = useState({
     property_id: '',
     category_id: '',
+    search: '',
   });
 
   useEffect(() => {
@@ -85,10 +85,9 @@ export default function Expenses() {
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-AE', {
-      style: 'currency',
-      currency: 'AED',
       minimumFractionDigits: 0,
-    }).format(value);
+      maximumFractionDigits: 0,
+    }).format(value || 0);
   };
 
   const formatDate = (dateStr: string) => {
@@ -109,99 +108,33 @@ export default function Expenses() {
   const filteredExpenses = expenses.filter(expense => {
     if (filters.property_id && expense.property_id !== filters.property_id) return false;
     if (filters.category_id && expense.category_id !== filters.category_id) return false;
+    if (filters.search) {
+      const search = filters.search.toLowerCase();
+      const matchesVendor = expense.vendor?.toLowerCase().includes(search);
+      const matchesDesc = expense.description?.toLowerCase().includes(search);
+      if (!matchesVendor && !matchesDesc) return false;
+    }
     return true;
   });
 
   const totalExpenses = filteredExpenses.reduce((sum, e) => sum + (Number(e.total_amount) || 0), 0);
 
-  const columns = [
-    {
-      key: 'expense_date',
-      header: 'Date',
-      render: (expense: Expense) => formatDate(expense.expense_date),
-    },
-    {
-      key: 'vendor',
-      header: 'Vendor',
-      render: (expense: Expense) => expense.vendor || 'N/A',
-    },
-    {
-      key: 'category_id',
-      header: 'Category',
-      render: (expense: Expense) => getCategoryName(expense.category_id),
-    },
-    {
-      key: 'description',
-      header: 'Description',
-      render: (expense: Expense) => (
-        <span className="truncate max-w-xs block">{expense.description || '-'}</span>
-      ),
-    },
-    {
-      key: 'amount',
-      header: 'Amount',
-      render: (expense: Expense) => formatCurrency(expense.amount),
-    },
-    {
-      key: 'vat_amount',
-      header: 'VAT',
-      render: (expense: Expense) => formatCurrency(expense.vat_amount || 0),
-    },
-    {
-      key: 'total_amount',
-      header: 'Total',
-      render: (expense: Expense) => (
-        <span className="font-medium">{formatCurrency(expense.total_amount || 0)}</span>
-      ),
-    },
-    {
-      key: 'receipt',
-      header: 'Receipts',
-      render: (expense: Expense) => (
-        expense.receipt_filename ? (
-          <button
-            onClick={(e) => handleViewReceipts(expense, e)}
-            className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition-colors"
-            title="View Receipts"
-          >
-            <Paperclip className="w-3 h-3" />
-            <span className="text-xs font-medium">View</span>
-          </button>
-        ) : (
-          <span className="text-gray-400 text-sm">None</span>
-        )
-      ),
-    },
-    {
-      key: 'actions',
-      header: '',
-      render: (expense: Expense) => (
-        <button
-          onClick={(e) => handleDelete(expense.id, e)}
-          className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg"
-          title="Delete"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      ),
-    },
-  ];
-
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Expenses</h1>
-          <p className="text-gray-500">
-            {filteredExpenses.length} expenses • Total: {formatCurrency(totalExpenses)}
-            {(filters.property_id || filters.category_id) && (
-              <span className="text-blue-600 ml-2">(filtered)</span>
-            )}
+          <h1 className="text-lg font-semibold text-stone-900">Expenses</h1>
+          <p className="text-sm text-stone-500">
+            {filteredExpenses.length} expenses · Total: AED {formatCurrency(totalExpenses)}
           </p>
         </div>
         <button
@@ -209,53 +142,124 @@ export default function Expenses() {
             setSelectedExpense(null);
             setShowForm(true);
           }}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="inline-flex items-center gap-2 px-3 py-1.5 bg-sky-600 text-white text-sm font-medium rounded hover:bg-sky-700 transition-colors"
         >
-          <Plus className="w-5 h-5 mr-2" />
+          <Plus className="w-4 h-4" />
           Add Expense
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm p-4">
-        <div className="flex flex-wrap gap-4">
-          <select
-            value={filters.property_id}
-            onChange={(e) => setFilters({ ...filters, property_id: e.target.value })}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Properties</option>
-            {properties.map((property) => (
-              <option key={property.id} value={property.id}>
-                {property.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filters.category_id}
-            onChange={(e) => setFilters({ ...filters, category_id: e.target.value })}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Categories</option>
-            {categories.filter(c => c.category_type === 'operating_expense').map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+      {/* Filters bar */}
+      <div className="flex items-center gap-3 py-2">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+          <input
+            type="text"
+            placeholder="Search vendor or description..."
+            value={filters.search}
+            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            className="w-full pl-9 pr-3 py-1.5 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+          />
         </div>
+        <select
+          value={filters.property_id}
+          onChange={(e) => setFilters({ ...filters, property_id: e.target.value })}
+          className="text-sm border border-stone-300 rounded px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+        >
+          <option value="">All Properties</option>
+          {properties.map((property) => (
+            <option key={property.id} value={property.id}>
+              {property.name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={filters.category_id}
+          onChange={(e) => setFilters({ ...filters, category_id: e.target.value })}
+          className="text-sm border border-stone-300 rounded px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+        >
+          <option value="">All Categories</option>
+          {categories.filter(c => c.category_type === 'operating_expense').map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm">
-        <DataTable
-          columns={columns}
-          data={filteredExpenses}
-          onRowClick={(expense) => {
-            setSelectedExpense(expense);
-            setShowForm(true);
-          }}
-        />
+      <div className="bg-white border border-stone-200 rounded-lg overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-stone-50 border-b border-stone-200">
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Date</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Vendor</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Category</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Description</th>
+              <th className="px-4 py-2.5 text-right text-xs font-medium text-stone-500 uppercase tracking-wide">Amount</th>
+              <th className="px-4 py-2.5 text-right text-xs font-medium text-stone-500 uppercase tracking-wide">VAT</th>
+              <th className="px-4 py-2.5 text-right text-xs font-medium text-stone-500 uppercase tracking-wide">Total</th>
+              <th className="px-4 py-2.5 text-center text-xs font-medium text-stone-500 uppercase tracking-wide">Receipt</th>
+              <th className="px-4 py-2.5 text-center text-xs font-medium text-stone-500 uppercase tracking-wide">Paid</th>
+              <th className="px-4 py-2.5"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-100">
+            {filteredExpenses.map((expense) => (
+              <tr
+                key={expense.id}
+                className="hover:bg-stone-50 cursor-pointer"
+                onClick={() => {
+                  setSelectedExpense(expense);
+                  setShowForm(true);
+                }}
+              >
+                <td className="px-4 py-2.5 text-sm text-stone-600 tabular-nums">{formatDate(expense.expense_date)}</td>
+                <td className="px-4 py-2.5 text-sm font-medium text-stone-900">{expense.vendor || 'N/A'}</td>
+                <td className="px-4 py-2.5 text-sm text-stone-600">{getCategoryName(expense.category_id)}</td>
+                <td className="px-4 py-2.5 text-sm text-stone-600 max-w-xs truncate">{expense.description || '-'}</td>
+                <td className="px-4 py-2.5 text-sm text-stone-600 text-right tabular-nums">AED {formatCurrency(expense.amount)}</td>
+                <td className="px-4 py-2.5 text-sm text-stone-600 text-right tabular-nums">AED {formatCurrency(expense.vat_amount || 0)}</td>
+                <td className="px-4 py-2.5 text-sm font-medium text-stone-900 text-right tabular-nums">AED {formatCurrency(expense.total_amount || 0)}</td>
+                <td className="px-4 py-2.5 text-center">
+                  {expense.receipt_filename ? (
+                    <button
+                      onClick={(e) => handleViewReceipts(expense, e)}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 rounded text-xs font-medium hover:bg-green-100 transition-colors"
+                    >
+                      <Paperclip className="w-3 h-3" />
+                      View
+                    </button>
+                  ) : (
+                    <Minus className="w-4 h-4 text-stone-300 mx-auto" />
+                  )}
+                </td>
+                <td className="px-4 py-2.5 text-center">
+                  {expense.is_paid ? (
+                    <Check className="w-4 h-4 text-green-600 mx-auto" />
+                  ) : (
+                    <Minus className="w-4 h-4 text-stone-300 mx-auto" />
+                  )}
+                </td>
+                <td className="px-4 py-2.5">
+                  <button
+                    onClick={(e) => handleDelete(expense.id, e)}
+                    className="p-1 text-stone-400 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {filteredExpenses.length === 0 && (
+              <tr>
+                <td colSpan={10} className="px-4 py-12 text-center text-stone-500">
+                  No expenses found
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Expense Form Modal */}
@@ -329,52 +333,57 @@ function ReceiptViewer({ expense, onClose }: ReceiptViewerProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-          <div>
-            <h2 className="text-lg font-bold">Receipts</h2>
-            <p className="text-sm text-gray-500">
-              {expense.vendor} • {expense.description || 'No description'}
-            </p>
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+        {/* Backdrop */}
+        <div className="fixed inset-0 bg-black/30" onClick={onClose} />
+
+        {/* Modal */}
+        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-stone-200 flex justify-between items-center">
+            <div>
+              <h2 className="text-base font-semibold text-stone-900">Receipts</h2>
+              <p className="text-sm text-stone-500">
+                {expense.vendor} · {expense.description || 'No description'}
+              </p>
+            </div>
+            <button onClick={onClose} className="p-1 text-stone-400 hover:text-stone-600">
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-full">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
 
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
           </div>
         ) : receipts.length === 0 ? (
-          <div className="flex items-center justify-center h-64 text-gray-500">
+          <div className="flex items-center justify-center h-64 text-stone-500">
             No receipts attached
           </div>
         ) : (
           <div className="flex flex-1 overflow-hidden">
             {/* Thumbnail Sidebar */}
-            <div className="w-48 border-r bg-gray-50 overflow-y-auto p-2 space-y-2">
+            <div className="w-48 border-r border-stone-200 bg-stone-50 overflow-y-auto p-2 space-y-2">
               {receipts.map((receipt) => (
                 <button
                   key={receipt.id}
                   onClick={() => setSelectedReceipt(receipt)}
-                  className={`w-full p-2 rounded-lg text-left transition-colors ${
+                  className={`w-full p-2 rounded text-left transition-colors ${
                     selectedReceipt?.id === receipt.id
-                      ? 'bg-blue-100 border-2 border-blue-500'
-                      : 'bg-white border border-gray-200 hover:border-blue-300'
+                      ? 'bg-sky-100 border border-sky-500'
+                      : 'bg-white border border-stone-200 hover:border-sky-300'
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     {isImage(receipt.content_type) ? (
-                      <Image className="w-8 h-8 text-blue-500 flex-shrink-0" />
+                      <Image className="w-6 h-6 text-sky-500 flex-shrink-0" />
                     ) : (
-                      <FileText className="w-8 h-8 text-red-500 flex-shrink-0" />
+                      <FileText className="w-6 h-6 text-red-500 flex-shrink-0" />
                     )}
                     <div className="overflow-hidden">
-                      <p className="text-xs font-medium truncate">{receipt.filename}</p>
-                      <p className="text-xs text-gray-500">{formatFileSize(receipt.file_size)}</p>
+                      <p className="text-xs font-medium truncate text-stone-700">{receipt.filename}</p>
+                      <p className="text-xs text-stone-500">{formatFileSize(receipt.file_size)}</p>
                     </div>
                   </div>
                 </button>
@@ -385,7 +394,7 @@ function ReceiptViewer({ expense, onClose }: ReceiptViewerProps) {
             <div className="flex-1 flex flex-col">
               {selectedReceipt && (
                 <>
-                  <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-4">
+                  <div className="flex-1 overflow-auto bg-stone-100 flex items-center justify-center p-4">
                     {isImage(selectedReceipt.content_type) ? (
                       <img
                         src={getReceiptUrl(selectedReceipt)}
@@ -395,12 +404,12 @@ function ReceiptViewer({ expense, onClose }: ReceiptViewerProps) {
                     ) : (
                       <div className="text-center">
                         <FileText className="w-24 h-24 text-red-400 mx-auto mb-4" />
-                        <p className="text-gray-600 mb-4">PDF Preview not available</p>
+                        <p className="text-stone-600 mb-4">PDF Preview not available</p>
                         <a
                           href={getReceiptUrl(selectedReceipt)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-sky-600 text-white text-sm rounded hover:bg-sky-700 transition-colors"
                         >
                           <Eye className="w-4 h-4" />
                           Open PDF
@@ -410,17 +419,17 @@ function ReceiptViewer({ expense, onClose }: ReceiptViewerProps) {
                   </div>
 
                   {/* Action Bar */}
-                  <div className="p-3 border-t bg-white flex items-center justify-between">
+                  <div className="px-4 py-3 border-t border-stone-200 flex items-center justify-between">
                     <div>
-                      <p className="font-medium text-sm">{selectedReceipt.filename}</p>
-                      <p className="text-xs text-gray-500">
-                        {formatFileSize(selectedReceipt.file_size)} • {selectedReceipt.content_type}
+                      <p className="text-sm font-medium text-stone-700">{selectedReceipt.filename}</p>
+                      <p className="text-xs text-stone-500">
+                        {formatFileSize(selectedReceipt.file_size)} · {selectedReceipt.content_type}
                       </p>
                     </div>
                     <a
                       href={getReceiptUrl(selectedReceipt)}
                       download={selectedReceipt.filename}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
                     >
                       <Download className="w-4 h-4" />
                       Download
@@ -431,6 +440,7 @@ function ReceiptViewer({ expense, onClose }: ReceiptViewerProps) {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
@@ -542,7 +552,7 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
     if (contentType === 'application/pdf') {
       return <File className="w-5 h-5 text-red-500" />;
     }
-    return <Image className="w-5 h-5 text-blue-500" />;
+    return <Image className="w-5 h-5 text-sky-500" />;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -573,21 +583,28 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b flex justify-between items-center">
-          <h2 className="text-xl font-bold">{expense ? 'Edit Expense' : 'New Expense'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+        {/* Backdrop */}
+        <div className="fixed inset-0 bg-black/30" onClick={onClose} />
+
+        {/* Modal */}
+        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-stone-200 flex justify-between items-center">
+            <h2 className="text-base font-semibold text-stone-900">{expense ? 'Edit Expense' : 'New Expense'}</h2>
+            <button onClick={onClose} className="p-1 text-stone-400 hover:text-stone-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-4 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Property</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Property</label>
             <select
               value={formData.property_id}
               onChange={(e) => setFormData({ ...formData, property_id: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
               required
             >
               {properties.map((p) => (
@@ -596,11 +613,11 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Category</label>
             <select
               value={formData.category_id}
               onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
               required
             >
               <option value="">Select category...</option>
@@ -611,67 +628,67 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Date</label>
               <input
                 type="date"
                 value={formData.expense_date}
                 onChange={(e) => setFormData({ ...formData, expense_date: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Vendor</label>
               <input
                 type="text"
                 value={formData.vendor}
                 onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                 placeholder="e.g., DEWA, Cleaner"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Description</label>
             <input
               type="text"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
               placeholder="Brief description"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Amount (AED)</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Amount (AED)</label>
               <input
                 type="number"
                 value={formData.amount}
                 onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                 required
                 min="0"
                 step="0.01"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">VAT Amount (AED)</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">VAT Amount (AED)</label>
               <input
                 type="number"
                 value={formData.vat_amount}
                 onChange={(e) => setFormData({ ...formData, vat_amount: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                 min="0"
                 step="0.01"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Payment Method</label>
             <select
               value={formData.payment_method}
               onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
             >
               <option value="cash">Cash</option>
               <option value="credit_card">Credit Card</option>
@@ -682,26 +699,26 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
           </div>
 
           {/* Receipt Upload Section */}
-          <div className="border rounded-lg p-4 bg-gray-50">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="border border-stone-200 rounded-lg p-4 bg-stone-50">
+            <label className="block text-sm font-medium text-stone-700 mb-2">
               Receipts ({existingReceipts.length + pendingFiles.length}/10)
             </label>
 
             {/* Existing Receipts */}
             {loadingReceipts ? (
-              <p className="text-sm text-gray-500">Loading receipts...</p>
+              <p className="text-sm text-stone-500">Loading receipts...</p>
             ) : (
               existingReceipts.length > 0 && (
                 <div className="space-y-2 mb-3">
                   {existingReceipts.map((receipt) => (
-                    <div key={receipt.id} className="flex items-center justify-between p-2 bg-white border border-green-200 rounded-lg">
+                    <div key={receipt.id} className="flex items-center justify-between p-2 bg-white border border-green-200 rounded">
                       <div className="flex items-center gap-2">
                         {getFileIcon(receipt.content_type)}
                         <div>
-                          <p className="text-sm font-medium text-gray-700 truncate max-w-[180px]">
+                          <p className="text-sm font-medium text-stone-700 truncate max-w-[180px]">
                             {receipt.filename}
                           </p>
-                          <p className="text-xs text-gray-500">{formatFileSize(receipt.file_size)}</p>
+                          <p className="text-xs text-stone-500">{formatFileSize(receipt.file_size)}</p>
                         </div>
                       </div>
                       <div className="flex gap-1">
@@ -709,7 +726,7 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
                           href={`${API_BASE_URL}/receipts/${expense?.id}/${receipt.id}/download`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-1.5 text-blue-600 hover:bg-blue-100 rounded"
+                          className="p-1.5 text-sky-600 hover:bg-sky-100 rounded"
                           title="View"
                         >
                           <Eye className="w-4 h-4" />
@@ -733,14 +750,14 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
             {pendingFiles.length > 0 && (
               <div className="space-y-2 mb-3">
                 {pendingFiles.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div key={index} className="flex items-center justify-between p-2 bg-sky-50 border border-sky-200 rounded">
                     <div className="flex items-center gap-2">
                       {getFileIcon(file.type)}
                       <div>
-                        <p className="text-sm font-medium text-gray-700 truncate max-w-[180px]">
+                        <p className="text-sm font-medium text-stone-700 truncate max-w-[180px]">
                           {file.name}
                         </p>
-                        <p className="text-xs text-blue-600">{formatFileSize(file.size)} • Will upload on save</p>
+                        <p className="text-xs text-sky-600">{formatFileSize(file.size)} · Will upload on save</p>
                       </div>
                     </div>
                     <button
@@ -769,13 +786,13 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-white transition-colors w-full justify-center"
+                  className="flex items-center px-4 py-2 border-2 border-dashed border-stone-300 rounded hover:border-sky-400 hover:bg-white transition-colors w-full justify-center"
                 >
-                  <Upload className="w-4 h-4 mr-2 text-gray-500" />
-                  <span className="text-sm text-gray-600">Add Receipts</span>
+                  <Upload className="w-4 h-4 mr-2 text-stone-500" />
+                  <span className="text-sm text-stone-600">Add Receipts</span>
                 </button>
-                <p className="text-xs text-gray-500 mt-1 text-center">
-                  JPG, PNG, GIF, or PDF • Max 5MB each
+                <p className="text-xs text-stone-500 mt-1 text-center">
+                  JPG, PNG, GIF, or PDF · Max 5MB each
                 </p>
               </div>
             )}
@@ -787,27 +804,30 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
               id="is_paid"
               checked={formData.is_paid}
               onChange={(e) => setFormData({ ...formData, is_paid: e.target.checked })}
-              className="w-4 h-4 text-blue-600 rounded"
+              className="w-4 h-4 text-sky-600 rounded border-stone-300 focus:ring-sky-500"
             />
-            <label htmlFor="is_paid" className="ml-2 text-sm text-gray-700">Paid</label>
+            <label htmlFor="is_paid" className="ml-2 text-sm text-stone-700">Paid</label>
           </div>
-          <div className="flex justify-end gap-3 pt-4 border-t">
+
+          {/* Footer */}
+          <div className="px-4 py-3 border-t border-stone-200 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="px-3 py-1.5 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded disabled:opacity-50 transition-colors"
             >
               {saving ? 'Saving...' : 'Save Expense'}
             </button>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );

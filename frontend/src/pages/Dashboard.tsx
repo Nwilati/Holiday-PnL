@@ -1,28 +1,5 @@
 import { useState, useEffect } from 'react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from 'recharts';
-import {
-  DollarSign,
-  TrendingUp,
-  Calendar,
-  Wallet,
-  Building2,
-  Plus,
-  Banknote,
-  AlertCircle,
-  Home,
-} from 'lucide-react';
+import { TrendingUp, TrendingDown, ChevronRight, Building2, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 
@@ -41,35 +18,6 @@ interface KPIs {
   revpar: number;
   total_bookings: number;
   total_nights: number;
-}
-
-interface MonthlyData {
-  month: string;
-  gross_revenue: number;
-  net_revenue: number;
-  expenses: number;
-  noi: number;
-}
-
-interface ChequeStatusData {
-  name: string;
-  value: number;
-  color: string;
-  [key: string]: string | number;
-}
-
-interface PropertyRevenueData {
-  name: string;
-  shortTerm: number;
-  annual: number;
-  total: number;
-}
-
-interface ChequeTimelineData {
-  label: string;
-  count: number;
-  amount: number;
-  color: string;
 }
 
 interface UpcomingCheque {
@@ -91,23 +39,56 @@ interface AnnualRevenue {
   active_tenancies: number;
 }
 
-// Cheque status colors
-const CHEQUE_STATUS_COLORS = {
-  pending: '#f59e0b',   // amber
-  deposited: '#3b82f6', // blue
-  cleared: '#10b981',   // green
-  bounced: '#ef4444',   // red
+// Utility: Format currency without "AED" prefix for density
+const formatAmount = (value: number) => {
+  return new Intl.NumberFormat('en-AE', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value || 0);
 };
+
+// Format date
+const formatDate = (dateStr: string) => {
+  return new Date(dateStr).toLocaleDateString('en-AE', {
+    day: 'numeric',
+    month: 'short',
+  });
+};
+
+// Metric component - SAP style
+const Metric = ({ label, value, prefix = 'AED', trend, small = false }: {
+  label: string;
+  value: number;
+  prefix?: string;
+  trend?: number;
+  small?: boolean;
+}) => (
+  <div className={small ? 'py-2' : 'py-3'}>
+    <dt className="text-xs text-stone-500 uppercase tracking-wide">{label}</dt>
+    <dd className="mt-1 flex items-baseline gap-2">
+      <span className={`font-semibold text-stone-900 ${small ? 'text-lg' : 'text-xl'}`}>
+        {prefix} {formatAmount(value)}
+      </span>
+      {trend !== undefined && trend !== 0 && (
+        <span className={`text-xs flex items-center gap-0.5 ${
+          trend > 0 ? 'text-green-600' : 'text-red-600'
+        }`}>
+          {trend > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+          {Math.abs(trend)}%
+        </span>
+      )}
+    </dd>
+  </div>
+);
 
 export default function Dashboard() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [kpis, setKpis] = useState<KPIs | null>(null);
-  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
   const [upcomingCheques, setUpcomingCheques] = useState<UpcomingCheque[]>([]);
   const [allCheques, setAllCheques] = useState<any[]>([]);
   const [annualRevenue, setAnnualRevenue] = useState<AnnualRevenue | null>(null);
-  const [propertyRevenueData, setPropertyRevenueData] = useState<PropertyRevenueData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const currentYear = new Date().getFullYear();
@@ -121,10 +102,7 @@ export default function Dashboard() {
     loadUpcomingCheques();
     loadAnnualRevenue();
     loadAllCheques();
-    if (!selectedProperty) {
-      loadPropertyRevenueComparison();
-    }
-  }, [selectedProperty]);
+  }, [selectedProperty, selectedYear, properties]);
 
   const loadProperties = async () => {
     try {
@@ -138,19 +116,15 @@ export default function Dashboard() {
   };
 
   const loadDashboardData = async () => {
+    if (properties.length === 0) return;
     setIsLoading(true);
     try {
-      const startDate = `${currentYear}-01-01`;
-      const endDate = `${currentYear}-12-31`;
+      const startDate = `${selectedYear}-01-01`;
+      const endDate = `${selectedYear}-12-31`;
 
       if (selectedProperty) {
-        const [kpiRes, trendRes] = await Promise.all([
-          api.getKPIs(selectedProperty, startDate, endDate),
-          api.getRevenueTrend(selectedProperty, currentYear),
-        ]);
-
+        const kpiRes = await api.getKPIs(selectedProperty, startDate, endDate);
         setKpis(kpiRes.data);
-        setMonthlyData(trendRes.data || []);
       } else {
         // Load aggregate for all properties
         const allKpis: KPIs = {
@@ -188,7 +162,6 @@ export default function Dashboard() {
         }
 
         setKpis(allKpis);
-        setMonthlyData([]);
       }
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
@@ -213,8 +186,8 @@ export default function Dashboard() {
 
   const loadAnnualRevenue = async () => {
     try {
-      const startDate = `${currentYear}-01-01`;
-      const endDate = `${currentYear}-12-31`;
+      const startDate = `${selectedYear}-01-01`;
+      const endDate = `${selectedYear}-12-31`;
       const params: { property_id?: string; start_date?: string; end_date?: string } = {
         start_date: startDate,
         end_date: endDate,
@@ -251,65 +224,6 @@ export default function Dashboard() {
     }
   };
 
-  const loadPropertyRevenueComparison = async () => {
-    if (properties.length === 0) return;
-
-    try {
-      const startDate = `${currentYear}-01-01`;
-      const endDate = `${currentYear}-12-31`;
-      const revenueData: PropertyRevenueData[] = [];
-
-      for (const prop of properties) {
-        try {
-          const [kpiRes, annualRes] = await Promise.all([
-            api.getKPIs(prop.id, startDate, endDate),
-            api.getAnnualRevenue({ property_id: prop.id, start_date: startDate, end_date: endDate }),
-          ]);
-
-          const shortTerm = kpiRes.data.total_revenue || 0;
-          const annual = annualRes.data.total_cleared || 0;
-
-          revenueData.push({
-            name: prop.name.length > 15 ? prop.name.substring(0, 15) + '...' : prop.name,
-            shortTerm,
-            annual,
-            total: shortTerm + annual,
-          });
-        } catch (e) {
-          console.error('Failed to load revenue for property:', prop.id);
-        }
-      }
-
-      // Sort by total revenue descending
-      revenueData.sort((a, b) => b.total - a.total);
-      setPropertyRevenueData(revenueData);
-    } catch (error) {
-      console.error('Failed to load property revenue comparison:', error);
-    }
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-AE', {
-      style: 'currency',
-      currency: 'AED',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value || 0);
-  };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-AE', {
-      day: 'numeric',
-      month: 'short',
-    });
-  };
-
-  const getChequeUrgencyColor = (daysUntilDue: number) => {
-    if (daysUntilDue <= 3) return 'bg-red-100 text-red-700 border-red-200';
-    if (daysUntilDue <= 7) return 'bg-orange-100 text-orange-700 border-orange-200';
-    return 'bg-blue-100 text-blue-700 border-blue-200';
-  };
-
   // Combined revenue (short-term + annual cleared)
   const getCombinedRevenue = () => {
     const shortTerm = Number(kpis?.total_revenue) || 0;
@@ -324,32 +238,16 @@ export default function Dashboard() {
     return shortTermNOI + annualCleared;
   };
 
-  // Get cheque status breakdown for pie chart
-  const getChequeStatusData = (): ChequeStatusData[] => {
-    const statusCounts = {
-      pending: 0,
-      deposited: 0,
-      cleared: 0,
-      bounced: 0,
-    };
-
-    allCheques.forEach((cheque) => {
-      const status = cheque.status as keyof typeof statusCounts;
-      if (statusCounts[status] !== undefined) {
-        statusCounts[status] += cheque.amount || 0;
-      }
-    });
-
-    return [
-      { name: 'Pending', value: statusCounts.pending, color: CHEQUE_STATUS_COLORS.pending },
-      { name: 'Deposited', value: statusCounts.deposited, color: CHEQUE_STATUS_COLORS.deposited },
-      { name: 'Cleared', value: statusCounts.cleared, color: CHEQUE_STATUS_COLORS.cleared },
-      { name: 'Bounced', value: statusCounts.bounced, color: CHEQUE_STATUS_COLORS.bounced },
-    ].filter((item) => item.value > 0);
+  // Get collection percentage
+  const getCollectionPercent = () => {
+    const cleared = Number(annualRevenue?.total_cleared) || 0;
+    const pending = Number(annualRevenue?.total_pending) || 0;
+    const total = cleared + pending;
+    return total > 0 ? Math.round((cleared / total) * 100) : 0;
   };
 
   // Get cheques due timeline data
-  const getChequesTimelineData = (): ChequeTimelineData[] => {
+  const getChequesTimelineData = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -383,48 +281,17 @@ export default function Dashboard() {
       });
 
     return [
-      { label: 'Overdue', ...timeline.overdue, color: '#ef4444' },
-      { label: 'This Week', ...timeline.thisWeek, color: '#f97316' },
-      { label: 'This Month', ...timeline.thisMonth, color: '#f59e0b' },
-      { label: 'Next 30 Days', ...timeline.next30Days, color: '#3b82f6' },
+      { label: 'Overdue', ...timeline.overdue, status: 'negative' as const },
+      { label: 'This Week', ...timeline.thisWeek, status: 'warning' as const },
+      { label: 'This Month', ...timeline.thisMonth, status: 'info' as const },
+      { label: 'Next 30 Days', ...timeline.next30Days, status: 'neutral' as const },
     ];
-  };
-
-  // Get combined monthly revenue data (short-term + annual cheques by cleared month)
-  const getCombinedMonthlyData = () => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const combined: { month: string; shortTerm: number; annual: number }[] = months.map((m) => ({
-      month: m,
-      shortTerm: 0,
-      annual: 0,
-    }));
-
-    // Add short-term revenue from monthlyData
-    monthlyData.forEach((data) => {
-      const monthIndex = months.findIndex((m) => data.month.startsWith(m));
-      if (monthIndex >= 0) {
-        combined[monthIndex].shortTerm = data.gross_revenue || 0;
-      }
-    });
-
-    // Add annual tenancy cleared cheques by their cleared_date month
-    allCheques
-      .filter((cheque) => cheque.status === 'cleared' && cheque.cleared_date)
-      .forEach((cheque) => {
-        const clearedDate = new Date(cheque.cleared_date);
-        if (clearedDate.getFullYear() === currentYear) {
-          const monthIndex = clearedDate.getMonth();
-          combined[monthIndex].annual += cheque.amount || 0;
-        }
-      });
-
-    return combined;
   };
 
   if (isLoading && properties.length === 0) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="w-12 h-12 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-2 border-stone-200 border-t-sky-600 rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -432,408 +299,201 @@ export default function Dashboard() {
   if (properties.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
-        <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mb-6">
-          <Building2 className="w-10 h-10 text-orange-500" />
+        <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mb-4">
+          <Building2 className="w-8 h-8 text-stone-400" />
         </div>
-        <h2 className="text-2xl font-bold text-stone-800 mb-2">No Properties Yet</h2>
-        <p className="text-stone-500 mb-6 text-center max-w-md">
-          Add your first holiday home property to start tracking revenue and expenses.
+        <h2 className="text-lg font-semibold text-stone-800 mb-2">No Properties Yet</h2>
+        <p className="text-sm text-stone-500 mb-6 text-center max-w-md">
+          Add your first property to start tracking revenue and expenses.
         </p>
         <Link
           to="/properties"
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl font-medium shadow-lg shadow-orange-200 hover:shadow-xl transition-all duration-200"
+          className="flex items-center gap-2 px-4 py-2 bg-sky-600 text-white text-sm rounded hover:bg-sky-700 transition-colors"
         >
-          <Plus className="w-5 h-5" />
-          Add Your First Property
+          <Plus className="w-4 h-4" />
+          Add Property
         </Link>
       </div>
     );
   }
 
-  const kpiCards = [
-    {
-      label: 'Short-Term Revenue',
-      value: formatCurrency(Number(kpis?.total_revenue) || 0),
-      icon: DollarSign,
-      color: 'bg-gradient-to-br from-emerald-400 to-emerald-600',
-    },
-    {
-      label: 'Annual Tenancy (Cleared)',
-      value: formatCurrency(Number(annualRevenue?.total_cleared) || 0),
-      icon: Home,
-      color: 'bg-gradient-to-br from-blue-400 to-blue-600',
-    },
-    {
-      label: 'Combined Revenue',
-      value: formatCurrency(getCombinedRevenue()),
-      icon: TrendingUp,
-      color: 'bg-gradient-to-br from-purple-400 to-purple-600',
-    },
-    {
-      label: 'Total Expenses',
-      value: formatCurrency(Number(kpis?.total_expenses) || 0),
-      icon: Wallet,
-      color: 'bg-gradient-to-br from-rose-400 to-rose-600',
-    },
-    {
-      label: 'Combined NOI',
-      value: formatCurrency(getCombinedNOI()),
-      icon: TrendingUp,
-      color: 'bg-gradient-to-br from-teal-400 to-teal-600',
-    },
-    {
-      label: 'Active Tenancies',
-      value: String(Number(annualRevenue?.active_tenancies) || 0),
-      icon: Calendar,
-      color: 'bg-gradient-to-br from-amber-400 to-amber-600',
-    },
-  ];
-
   return (
-    <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+    <div className="space-y-6">
+      {/* Page Header with Context Bar */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-stone-800">Dashboard</h1>
-          <p className="text-stone-500 mt-1">Overview of your property performance</p>
+          <h1 className="text-lg font-semibold text-stone-900">Dashboard</h1>
+          <p className="text-sm text-stone-500">Property performance overview</p>
         </div>
-        <div className="flex items-center gap-2 bg-white rounded-xl px-4 py-2.5 shadow-sm border border-stone-100">
-          <Building2 className="w-5 h-5 text-stone-400" />
+
+        {/* Context Controls */}
+        <div className="flex items-center gap-3">
           <select
             value={selectedProperty}
             onChange={(e) => setSelectedProperty(e.target.value)}
-            className="bg-transparent font-medium text-stone-700 focus:outline-none"
+            className="text-sm border border-stone-300 rounded px-3 py-1.5 bg-white text-stone-700 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
           >
             <option value="">All Properties</option>
-            {properties.map((property) => (
-              <option key={property.id} value={property.id}>
-                {property.name}
-              </option>
+            {properties.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
             ))}
+          </select>
+
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
+            className="text-sm border border-stone-300 rounded px-3 py-1.5 bg-white text-stone-700 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+          >
+            <option value={currentYear}>{currentYear}</option>
+            <option value={currentYear - 1}>{currentYear - 1}</option>
+            <option value={currentYear - 2}>{currentYear - 2}</option>
           </select>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-        {kpiCards.map((kpi, index) => (
-          <div
-            key={index}
-            className="bg-white rounded-2xl p-5 shadow-sm border border-stone-100 hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className={`p-2.5 rounded-xl ${kpi.color}`}>
-                <kpi.icon className="w-5 h-5 text-white" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-stone-800">{kpi.value}</p>
-            <p className="text-sm text-stone-500 mt-1">{kpi.label}</p>
+      {/* Primary Metrics Panel */}
+      <div className="bg-white border border-stone-200 rounded-lg">
+        <div className="px-4 py-3 border-b border-stone-100">
+          <h2 className="text-sm font-medium text-stone-700">Key Performance Indicators</h2>
+        </div>
+        <div className="px-4 py-2 grid grid-cols-6 divide-x divide-stone-100">
+          <Metric label="Short-Term Revenue" value={Number(kpis?.total_revenue) || 0} />
+          <Metric label="Annual Tenancy" value={Number(annualRevenue?.total_cleared) || 0} />
+          <Metric label="Combined Revenue" value={getCombinedRevenue()} />
+          <Metric label="Total Expenses" value={Number(kpis?.total_expenses) || 0} />
+          <Metric label="Net Operating Income" value={getCombinedNOI()} />
+          <div className="py-3 pl-4">
+            <dt className="text-xs text-stone-500 uppercase tracking-wide">Occupancy</dt>
+            <dd className="mt-1 text-xl font-semibold text-stone-900">
+              {Math.round(Number(kpis?.occupancy_rate) || 0)}%
+            </dd>
           </div>
-        ))}
+        </div>
       </div>
 
-      {/* Annual Tenancy Summary with Mini Pie Chart */}
-      {annualRevenue && (annualRevenue.total_cleared > 0 || annualRevenue.total_pending > 0 || annualRevenue.active_tenancies > 0) && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100 mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600">
-              <Home className="w-5 h-5 text-white" />
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-3 gap-6">
+
+        {/* Left: Cheque Collection */}
+        <div className="col-span-2 bg-white border border-stone-200 rounded-lg">
+          <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
+            <h2 className="text-sm font-medium text-stone-700">Annual Tenancy - Cheque Collection</h2>
+            <span className="text-xs text-stone-500">{selectedYear} YTD</span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="px-4 py-4">
+            <div className="flex items-center justify-between text-sm mb-2">
+              <span className="text-stone-600">Collection Progress</span>
+              <span className="font-medium text-stone-900">{getCollectionPercent()}%</span>
             </div>
-            <div>
-              <h2 className="text-lg font-bold text-stone-800">Annual Tenancy Summary</h2>
-              <p className="text-sm text-stone-500">{currentYear} Year to Date</p>
+            <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-sky-600 rounded-full transition-all"
+                style={{ width: `${getCollectionPercent()}%` }}
+              />
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
-            {/* Mini Pie Chart - Cleared vs Pending */}
-            <div className="flex flex-col items-center justify-center">
-              <ResponsiveContainer width={120} height={120}>
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: 'Cleared', value: annualRevenue.total_cleared, color: '#10b981' },
-                      { name: 'Pending', value: annualRevenue.total_pending, color: '#f59e0b' },
-                    ].filter(d => d.value > 0)}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={30}
-                    outerRadius={50}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    <Cell fill="#10b981" />
-                    <Cell fill="#f59e0b" />
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <p className="text-sm font-medium text-stone-600 mt-1">
-                {(() => {
-                  const cleared = Number(annualRevenue.total_cleared) || 0;
-                  const pending = Number(annualRevenue.total_pending) || 0;
-                  const total = cleared + pending;
-                  const collectedPercent = total > 0 ? (cleared / total) * 100 : 0;
-                  return `${collectedPercent.toFixed(1)}% Collected`;
-                })()}
-              </p>
+
+          {/* Metrics row */}
+          <div className="px-4 pb-4 grid grid-cols-4 gap-4">
+            <div className="p-3 bg-stone-50 rounded">
+              <div className="text-xs text-stone-500">Cleared</div>
+              <div className="text-sm font-semibold text-green-700 mt-1">
+                AED {formatAmount(Number(annualRevenue?.total_cleared) || 0)}
+              </div>
             </div>
-            <div className="p-4 bg-emerald-50 rounded-xl">
-              <p className="text-sm text-emerald-600 font-medium">Cleared Cheques</p>
-              <p className="text-xl font-bold text-emerald-700">{formatCurrency(Number(annualRevenue.total_cleared) || 0)}</p>
+            <div className="p-3 bg-stone-50 rounded">
+              <div className="text-xs text-stone-500">Pending</div>
+              <div className="text-sm font-semibold text-amber-700 mt-1">
+                AED {formatAmount(Number(annualRevenue?.total_pending) || 0)}
+              </div>
             </div>
-            <div className="p-4 bg-amber-50 rounded-xl">
-              <p className="text-sm text-amber-600 font-medium">Pending Cheques</p>
-              <p className="text-xl font-bold text-amber-700">{formatCurrency(Number(annualRevenue.total_pending) || 0)}</p>
+            <div className="p-3 bg-stone-50 rounded">
+              <div className="text-xs text-stone-500">Contract Value</div>
+              <div className="text-sm font-semibold text-stone-700 mt-1">
+                AED {formatAmount(Number(annualRevenue?.total_contract_value) || 0)}
+              </div>
             </div>
-            <div className="p-4 bg-blue-50 rounded-xl">
-              <p className="text-sm text-blue-600 font-medium">Total Contract Value</p>
-              <p className="text-xl font-bold text-blue-700">{formatCurrency(Number(annualRevenue.total_contract_value) || 0)}</p>
-            </div>
-            <div className="p-4 bg-purple-50 rounded-xl">
-              <p className="text-sm text-purple-600 font-medium">Active Tenancies</p>
-              <p className="text-xl font-bold text-purple-700">{Number(annualRevenue.active_tenancies) || 0}</p>
+            <div className="p-3 bg-stone-50 rounded">
+              <div className="text-xs text-stone-500">Active Tenancies</div>
+              <div className="text-sm font-semibold text-stone-700 mt-1">
+                {Number(annualRevenue?.active_tenancies) || 0}
+              </div>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Cheques Due Timeline Widget */}
-      {allCheques.length > 0 && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100 mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-400 to-purple-600">
-              <Calendar className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-stone-800">Cheques Due Timeline</h2>
-              <p className="text-sm text-stone-500">Pending cheques by due date</p>
-            </div>
+        {/* Right: Cheques Due */}
+        <div className="bg-white border border-stone-200 rounded-lg">
+          <div className="px-4 py-3 border-b border-stone-100">
+            <h2 className="text-sm font-medium text-stone-700">Cheques Due</h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {getChequesTimelineData().map((item, index) => (
-              <div
-                key={index}
-                className="p-4 rounded-xl border-2"
-                style={{ borderColor: item.color, backgroundColor: `${item.color}10` }}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                  <p className="text-sm font-medium" style={{ color: item.color }}>{item.label}</p>
-                </div>
-                <p className="text-2xl font-bold text-stone-800">{item.count}</p>
-                <p className="text-sm text-stone-500">{formatCurrency(item.amount)}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Upcoming Cheques Widget */}
-      {upcomingCheques.length > 0 && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500">
-                <Banknote className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-stone-800">Upcoming Cheques</h2>
-                <p className="text-sm text-stone-500">Due within 30 days</p>
-              </div>
-            </div>
-            <Link
-              to="/tenancies"
-              className="text-sm font-medium text-orange-600 hover:text-orange-700"
-            >
-              View All →
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {upcomingCheques.slice(0, 5).map((cheque) => (
-              <div
-                key={cheque.id}
-                className={`flex items-center justify-between p-4 rounded-xl border ${getChequeUrgencyColor(cheque.days_until_due)}`}
-              >
-                <div className="flex items-center gap-4">
-                  <AlertCircle className="w-5 h-5" />
-                  <div>
-                    <p className="font-medium">{cheque.tenant_name}</p>
-                    <p className="text-sm opacity-75">
-                      {cheque.property_name} • {cheque.cheque_number} • {cheque.bank_name}
-                    </p>
-                  </div>
+          <div className="divide-y divide-stone-100">
+            {getChequesTimelineData().map((row) => (
+              <div key={row.label} className="px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-2 h-2 rounded-full ${
+                    row.status === 'negative' ? 'bg-red-500' :
+                    row.status === 'warning' ? 'bg-amber-500' :
+                    row.status === 'info' ? 'bg-sky-500' : 'bg-stone-300'
+                  }`} />
+                  <span className="text-sm text-stone-700">{row.label}</span>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold">{formatCurrency(cheque.amount)}</p>
-                  <p className="text-sm opacity-75">
-                    {formatDate(cheque.due_date)} ({cheque.days_until_due}d)
-                  </p>
+                  <div className="text-sm font-medium text-stone-900">
+                    {row.count > 0 ? `AED ${formatAmount(row.amount)}` : '—'}
+                  </div>
+                  <div className="text-xs text-stone-500">
+                    {row.count} {row.count === 1 ? 'cheque' : 'cheques'}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Charts Grid - Property Revenue Comparison (All Properties) */}
-      {!selectedProperty && propertyRevenueData.length > 0 && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100 mb-8">
-          <h2 className="text-lg font-bold text-stone-800 mb-6">Property Revenue Comparison</h2>
-          <ResponsiveContainer width="100%" height={Math.max(300, propertyRevenueData.length * 50)}>
-            <BarChart data={propertyRevenueData} layout="vertical" margin={{ left: 20, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-              <XAxis type="number" stroke="#78716c" fontSize={12} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
-              <YAxis type="category" dataKey="name" stroke="#78716c" fontSize={12} width={100} />
-              <Tooltip
-                formatter={(value, name) => [formatCurrency(Number(value) || 0), name === 'shortTerm' ? 'Short-Term' : 'Annual Tenancy']}
-                contentStyle={{ borderRadius: '12px', border: '1px solid #e7e5e4' }}
-              />
-              <Legend />
-              <Bar dataKey="shortTerm" name="Short-Term" stackId="a" fill="#f97316" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="annual" name="Annual Tenancy" stackId="a" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+      {/* Upcoming Cheques Table */}
+      <div className="bg-white border border-stone-200 rounded-lg">
+        <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-stone-700">Upcoming Cheques</h2>
+          <Link to="/tenancies" className="text-xs text-sky-600 hover:text-sky-700 flex items-center gap-1">
+            View all <ChevronRight className="w-3 h-3" />
+          </Link>
         </div>
-      )}
-
-      {/* Charts Grid - Single Property Selected */}
-      {selectedProperty && (
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Combined Monthly Revenue Bar Chart */}
-          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
-            <h2 className="text-lg font-bold text-stone-800 mb-6">Combined Monthly Revenue</h2>
-            {(() => {
-              const combinedData = getCombinedMonthlyData();
-              const hasData = combinedData.some(d => d.shortTerm > 0 || d.annual > 0);
-              return hasData ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={combinedData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-                    <XAxis dataKey="month" stroke="#78716c" fontSize={12} />
-                    <YAxis stroke="#78716c" fontSize={12} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
-                    <Tooltip
-                      formatter={(value, name) => [formatCurrency(Number(value) || 0), name === 'shortTerm' ? 'Short-Term' : 'Annual Tenancy']}
-                      contentStyle={{ borderRadius: '12px', border: '1px solid #e7e5e4' }}
-                    />
-                    <Legend />
-                    <Bar dataKey="shortTerm" name="Short-Term" stackId="a" fill="#f97316" />
-                    <Bar dataKey="annual" name="Annual Tenancy" stackId="a" fill="#3b82f6" />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[300px] flex items-center justify-center text-stone-400">
-                  No revenue data for this period
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* Cheque Status Pie Chart */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
-            <h2 className="text-lg font-bold text-stone-800 mb-6">Cheque Status</h2>
-            {(() => {
-              const chequeStatusData = getChequeStatusData();
-              return chequeStatusData.length > 0 ? (
-                <>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={chequeStatusData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                        nameKey="name"
-                      >
-                        {chequeStatusData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(value) => [formatCurrency(Number(value) || 0), 'Amount']}
-                        contentStyle={{ borderRadius: '12px', border: '1px solid #e7e5e4' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="space-y-2 mt-4">
-                    {chequeStatusData.map((item, index) => (
-                      <div key={index} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                          <span className="text-sm text-stone-600">{item.name}</span>
-                        </div>
-                        <span className="text-sm font-medium text-stone-800">
-                          {formatCurrency(item.value)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="h-[200px] flex items-center justify-center text-stone-400">
-                  No cheque data
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
-
-      {/* Cheque Status Pie Chart - All Properties view */}
-      {!selectedProperty && allCheques.length > 0 && (
-        <div className="grid lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-100">
-            <h2 className="text-lg font-bold text-stone-800 mb-6">Overall Cheque Status</h2>
-            {(() => {
-              const chequeStatusData = getChequeStatusData();
-              return chequeStatusData.length > 0 ? (
-                <>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={chequeStatusData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                        nameKey="name"
-                      >
-                        {chequeStatusData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(value) => [formatCurrency(Number(value) || 0), 'Amount']}
-                        contentStyle={{ borderRadius: '12px', border: '1px solid #e7e5e4' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="space-y-2 mt-4">
-                    {chequeStatusData.map((item, index) => (
-                      <div key={index} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                          <span className="text-sm text-stone-600">{item.name}</span>
-                        </div>
-                        <span className="text-sm font-medium text-stone-800">
-                          {formatCurrency(item.value)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="h-[200px] flex items-center justify-center text-stone-400">
-                  No cheque data
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
+        <table className="w-full">
+          <thead>
+            <tr className="bg-stone-50 text-left">
+              <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Tenant</th>
+              <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Property</th>
+              <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Cheque</th>
+              <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Amount</th>
+              <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Due Date</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-100">
+            {upcomingCheques.slice(0, 5).map((cheque) => (
+              <tr key={cheque.id} className="hover:bg-stone-50">
+                <td className="px-4 py-2.5 text-sm font-medium text-stone-900">{cheque.tenant_name}</td>
+                <td className="px-4 py-2.5 text-sm text-stone-600">{cheque.property_name}</td>
+                <td className="px-4 py-2.5 text-sm text-stone-600">{cheque.cheque_number}</td>
+                <td className="px-4 py-2.5 text-sm font-medium text-stone-900 text-right tabular-nums">
+                  AED {formatAmount(cheque.amount)}
+                </td>
+                <td className="px-4 py-2.5 text-sm text-stone-600 text-right">{formatDate(cheque.due_date)}</td>
+              </tr>
+            ))}
+            {upcomingCheques.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-sm text-stone-500">
+                  No upcoming cheques
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

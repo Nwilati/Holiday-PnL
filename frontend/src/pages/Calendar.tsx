@@ -163,13 +163,13 @@ export default function Calendar() {
 
   const renderHeader = () => {
     return (
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold text-stone-800">Calendar</h1>
           <select
             value={selectedProperty}
             onChange={(e) => setSelectedProperty(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-sm border border-stone-200 rounded px-2 py-1.5 focus:outline-none focus:border-sky-500"
           >
             {properties.map((property) => (
               <option key={property.id} value={property.id}>
@@ -181,22 +181,22 @@ export default function Calendar() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-            className="p-2 hover:bg-gray-100 rounded-lg"
+            className="p-1.5 hover:bg-stone-100 rounded transition-colors"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="w-4 h-4 text-stone-600" />
           </button>
-          <h2 className="text-lg font-semibold w-40 text-center">
+          <h2 className="text-sm font-medium text-stone-800 w-32 text-center">
             {format(currentMonth, 'MMMM yyyy')}
           </h2>
           <button
             onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-            className="p-2 hover:bg-gray-100 rounded-lg"
+            className="p-1.5 hover:bg-stone-100 rounded transition-colors"
           >
-            <ChevronRight className="w-5 h-5" />
+            <ChevronRight className="w-4 h-4 text-stone-600" />
           </button>
           <button
             onClick={() => setCurrentMonth(new Date())}
-            className="ml-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="ml-2 px-3 py-1.5 text-sm bg-sky-600 text-white rounded hover:bg-sky-700 transition-colors"
           >
             Today
           </button>
@@ -208,9 +208,9 @@ export default function Calendar() {
   const renderDays = () => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return (
-      <div className="grid grid-cols-7 mb-2">
+      <div className="grid grid-cols-7 border-b border-stone-200">
         {days.map((day) => (
-          <div key={day} className="py-2 text-center text-sm font-semibold text-gray-600">
+          <div key={day} className="py-2 text-center text-xs font-medium text-stone-500 uppercase tracking-wide">
             {day}
           </div>
         ))}
@@ -243,18 +243,18 @@ export default function Calendar() {
         days.push(
           <div
             key={day.toString()}
-            className={`min-h-24 border border-gray-200 p-1 ${
-              !isCurrentMonth ? 'bg-gray-50' : 'bg-white'
+            className={`min-h-24 border-r border-b border-stone-200 p-1 ${
+              !isCurrentMonth ? 'bg-stone-50' : 'bg-white'
             }`}
           >
-            <div className={`text-sm mb-1 ${
+            <div className={`text-xs mb-1 ${
               isToday
-                ? 'bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center'
-                : isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+                ? 'bg-sky-600 text-white w-5 h-5 rounded-full flex items-center justify-center'
+                : isCurrentMonth ? 'text-stone-800' : 'text-stone-400'
             }`}>
               {format(day, 'd')}
             </div>
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {/* Render tenancies first (annual tenancy takes priority visually) */}
               {dayTenancies.slice(0, maxItems).map((tenancy) => {
                 const isContractStart = isSameDay(parseISO(tenancy.contract_start), currentDay);
@@ -265,11 +265,11 @@ export default function Calendar() {
                     className="text-xs px-1 py-0.5 rounded cursor-pointer truncate hover:opacity-80"
                     style={{
                       backgroundColor: ANNUAL_TENANCY_COLOR + '20',
-                      borderLeft: `3px solid ${ANNUAL_TENANCY_COLOR}`
+                      borderLeft: `2px solid ${ANNUAL_TENANCY_COLOR}`
                     }}
                     title={`${tenancy.tenant_name} (Annual Tenancy)`}
                   >
-                    {isContractStart ? '🏠 ' : ''}{tenancy.tenant_name}
+                    {isContractStart ? '' : ''}{tenancy.tenant_name}
                   </div>
                 );
               })}
@@ -283,16 +283,16 @@ export default function Calendar() {
                     className="text-xs px-1 py-0.5 rounded cursor-pointer truncate hover:opacity-80"
                     style={{
                       backgroundColor: getChannelColor(booking.channel_id) + '20',
-                      borderLeft: `3px solid ${getChannelColor(booking.channel_id)}`
+                      borderLeft: `2px solid ${getChannelColor(booking.channel_id)}`
                     }}
                     title={`${booking.guest_name} (${getChannelName(booking.channel_id)})`}
                   >
-                    {isCheckIn ? '✈ ' : ''}{booking.guest_name}
+                    {isCheckIn ? '' : ''}{booking.guest_name}
                   </div>
                 );
               })}
               {totalItems > maxItems && (
-                <div className="text-xs text-gray-500 px-1">
+                <div className="text-xs text-stone-500 px-1">
                   +{totalItems - maxItems} more
                 </div>
               )}
@@ -313,23 +313,23 @@ export default function Calendar() {
 
   const renderLegend = () => {
     return (
-      <div className="flex flex-wrap gap-4 mt-4 items-center">
+      <div className="flex flex-wrap gap-3 mt-3 items-center">
         {/* Annual Tenancy toggle */}
         <button
           onClick={() => setShowAnnualTenancy(!showAnnualTenancy)}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+          className={`flex items-center gap-2 px-2.5 py-1 rounded border text-sm transition-all ${
             showAnnualTenancy
               ? 'border-teal-500 bg-teal-50'
-              : 'border-gray-300 bg-gray-50 opacity-60'
+              : 'border-stone-200 bg-stone-50 opacity-60'
           }`}
         >
           <div
-            className="w-3 h-3 rounded"
+            className="w-2.5 h-2.5 rounded"
             style={{ backgroundColor: ANNUAL_TENANCY_COLOR }}
           />
-          <span className="text-sm text-gray-700">Annual Tenancy</span>
+          <span className="text-stone-700">Annual Tenancy</span>
           {showAnnualTenancy && tenancies.length > 0 && (
-            <span className="text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full">
+            <span className="text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full tabular-nums">
               {tenancies.length}
             </span>
           )}
@@ -339,10 +339,10 @@ export default function Calendar() {
         {channels.map((channel) => (
           <div key={channel.id} className="flex items-center gap-2">
             <div
-              className="w-3 h-3 rounded"
+              className="w-2.5 h-2.5 rounded"
               style={{ backgroundColor: channel.color_hex }}
             />
-            <span className="text-sm text-gray-600">{channel.name}</span>
+            <span className="text-xs text-stone-600">{channel.name}</span>
           </div>
         ))}
       </div>
@@ -353,63 +353,64 @@ export default function Calendar() {
     if (!selectedBooking) return null;
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
-          <div className="flex justify-between items-start mb-4">
-            <h3 className="text-lg font-semibold">Booking Details</h3>
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/30" onClick={() => setSelectedBooking(null)} />
+        <div className="relative bg-white rounded shadow-lg max-w-md w-full mx-4">
+          <div className="flex justify-between items-center px-4 py-3 border-b border-stone-200">
+            <h3 className="text-base font-semibold text-stone-800">Booking Details</h3>
             <button
               onClick={() => setSelectedBooking(null)}
-              className="text-gray-400 hover:text-gray-600"
+              className="p-1 text-stone-400 hover:text-stone-600 transition-colors"
             >
-              
+              <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="space-y-3">
+          <div className="p-4 space-y-3">
             <div>
-              <span className="text-sm text-gray-500">Guest</span>
-              <p className="font-medium">{selectedBooking.guest_name}</p>
+              <span className="text-xs text-stone-500">Guest</span>
+              <p className="text-sm font-medium text-stone-800">{selectedBooking.guest_name}</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <span className="text-sm text-gray-500">Check-in</span>
-                <p className="font-medium">{format(parseISO(selectedBooking.check_in), 'MMM d, yyyy')}</p>
+                <span className="text-xs text-stone-500">Check-in</span>
+                <p className="text-sm font-medium text-stone-800">{format(parseISO(selectedBooking.check_in), 'MMM d, yyyy')}</p>
               </div>
               <div>
-                <span className="text-sm text-gray-500">Check-out</span>
-                <p className="font-medium">{format(parseISO(selectedBooking.check_out), 'MMM d, yyyy')}</p>
+                <span className="text-xs text-stone-500">Check-out</span>
+                <p className="text-sm font-medium text-stone-800">{format(parseISO(selectedBooking.check_out), 'MMM d, yyyy')}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <span className="text-sm text-gray-500">Channel</span>
+                <span className="text-xs text-stone-500">Channel</span>
                 <div className="flex items-center gap-2">
                   <div
-                    className="w-3 h-3 rounded"
+                    className="w-2.5 h-2.5 rounded"
                     style={{ backgroundColor: getChannelColor(selectedBooking.channel_id) }}
                   />
-                  <p className="font-medium">{getChannelName(selectedBooking.channel_id)}</p>
+                  <p className="text-sm font-medium text-stone-800">{getChannelName(selectedBooking.channel_id)}</p>
                 </div>
               </div>
               <div>
-                <span className="text-sm text-gray-500">Status</span>
-                <p className="font-medium capitalize">{selectedBooking.status}</p>
+                <span className="text-xs text-stone-500">Status</span>
+                <p className="text-sm font-medium text-stone-800 capitalize">{selectedBooking.status}</p>
               </div>
             </div>
             <div>
-              <span className="text-sm text-gray-500">Nightly Rate</span>
-              <p className="font-medium">AED {selectedBooking.nightly_rate}</p>
+              <span className="text-xs text-stone-500">Nightly Rate</span>
+              <p className="text-sm font-medium text-stone-800 tabular-nums">AED {selectedBooking.nightly_rate}</p>
             </div>
           </div>
-          <div className="mt-6 flex gap-3">
+          <div className="flex gap-2 px-4 py-3 border-t border-stone-200 bg-stone-50">
             <a
               href={`/bookings?edit=${selectedBooking.id}`}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-center hover:bg-blue-700"
+              className="flex-1 px-3 py-1.5 bg-sky-600 text-white text-sm rounded text-center hover:bg-sky-700 transition-colors"
             >
               Edit Booking
             </a>
             <button
               onClick={() => setSelectedBooking(null)}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="flex-1 px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-100 rounded transition-colors"
             >
               Close
             </button>
@@ -432,73 +433,74 @@ export default function Calendar() {
     };
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg" style={{ backgroundColor: ANNUAL_TENANCY_COLOR + '20' }}>
-                <Home className="w-5 h-5" style={{ color: ANNUAL_TENANCY_COLOR }} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/30" onClick={() => setSelectedTenancy(null)} />
+        <div className="relative bg-white rounded shadow-lg max-w-md w-full mx-4">
+          <div className="flex justify-between items-center px-4 py-3 border-b border-stone-200">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded" style={{ backgroundColor: ANNUAL_TENANCY_COLOR + '20' }}>
+                <Home className="w-4 h-4" style={{ color: ANNUAL_TENANCY_COLOR }} />
               </div>
-              <h3 className="text-lg font-semibold">Annual Tenancy</h3>
+              <h3 className="text-base font-semibold text-stone-800">Annual Tenancy</h3>
             </div>
             <button
               onClick={() => setSelectedTenancy(null)}
-              className="text-gray-400 hover:text-gray-600"
+              className="p-1 text-stone-400 hover:text-stone-600 transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="space-y-3">
+          <div className="p-4 space-y-3">
             <div>
-              <span className="text-sm text-gray-500">Tenant Name</span>
-              <p className="font-medium">{selectedTenancy.tenant_name}</p>
+              <span className="text-xs text-stone-500">Tenant Name</span>
+              <p className="text-sm font-medium text-stone-800">{selectedTenancy.tenant_name}</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <span className="text-sm text-gray-500">Contract Start</span>
-                <p className="font-medium">{format(parseISO(selectedTenancy.contract_start), 'MMM d, yyyy')}</p>
+                <span className="text-xs text-stone-500">Contract Start</span>
+                <p className="text-sm font-medium text-stone-800">{format(parseISO(selectedTenancy.contract_start), 'MMM d, yyyy')}</p>
               </div>
               <div>
-                <span className="text-sm text-gray-500">Contract End</span>
-                <p className="font-medium">{format(parseISO(selectedTenancy.contract_end), 'MMM d, yyyy')}</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="text-sm text-gray-500">Annual Rent</span>
-                <p className="font-medium">{formatCurrency(selectedTenancy.annual_rent)}</p>
-              </div>
-              <div>
-                <span className="text-sm text-gray-500">Contract Value</span>
-                <p className="font-medium">{formatCurrency(selectedTenancy.contract_value)}</p>
+                <span className="text-xs text-stone-500">Contract End</span>
+                <p className="text-sm font-medium text-stone-800">{format(parseISO(selectedTenancy.contract_end), 'MMM d, yyyy')}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <span className="text-sm text-gray-500">Email</span>
-                <p className="font-medium text-sm truncate">{selectedTenancy.tenant_email}</p>
+                <span className="text-xs text-stone-500">Annual Rent</span>
+                <p className="text-sm font-medium text-stone-800 tabular-nums">{formatCurrency(selectedTenancy.annual_rent)}</p>
               </div>
               <div>
-                <span className="text-sm text-gray-500">Phone</span>
-                <p className="font-medium">{selectedTenancy.tenant_phone}</p>
+                <span className="text-xs text-stone-500">Contract Value</span>
+                <p className="text-sm font-medium text-stone-800 tabular-nums">{formatCurrency(selectedTenancy.contract_value)}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-xs text-stone-500">Email</span>
+                <p className="text-sm font-medium text-stone-800 truncate">{selectedTenancy.tenant_email}</p>
+              </div>
+              <div>
+                <span className="text-xs text-stone-500">Phone</span>
+                <p className="text-sm font-medium text-stone-800">{selectedTenancy.tenant_phone}</p>
               </div>
             </div>
             <div>
-              <span className="text-sm text-gray-500">Status</span>
-              <p className="font-medium capitalize">{selectedTenancy.status}</p>
+              <span className="text-xs text-stone-500">Status</span>
+              <p className="text-sm font-medium text-stone-800 capitalize">{selectedTenancy.status}</p>
             </div>
           </div>
-          <div className="mt-6 flex gap-3">
+          <div className="flex gap-2 px-4 py-3 border-t border-stone-200 bg-stone-50">
             <Link
               to="/tenancies"
-              className="flex-1 px-4 py-2 text-white rounded-lg text-center hover:opacity-90"
+              className="flex-1 px-3 py-1.5 text-white text-sm rounded text-center hover:opacity-90 transition-colors"
               style={{ backgroundColor: ANNUAL_TENANCY_COLOR }}
             >
               View Tenancy Details
             </Link>
             <button
               onClick={() => setSelectedTenancy(null)}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="flex-1 px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-100 rounded transition-colors"
             >
               Close
             </button>
@@ -511,7 +513,7 @@ export default function Calendar() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="w-12 h-12 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-2 border-stone-200 border-t-sky-600 rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -519,18 +521,18 @@ export default function Calendar() {
   if (properties.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
-        <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mb-6">
-          <Building2 className="w-10 h-10 text-orange-500" />
+        <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mb-4">
+          <Building2 className="w-8 h-8 text-stone-400" />
         </div>
-        <h2 className="text-2xl font-bold text-stone-800 mb-2">No Properties Yet</h2>
-        <p className="text-stone-500 mb-6 text-center max-w-md">
+        <h2 className="text-base font-semibold text-stone-800 mb-1">No Properties Yet</h2>
+        <p className="text-sm text-stone-500 mb-4 text-center max-w-md">
           Add a property first to view your booking calendar.
         </p>
         <Link
           to="/properties"
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl font-medium shadow-lg shadow-orange-200 hover:shadow-xl transition-all duration-200"
+          className="flex items-center gap-2 px-3 py-1.5 bg-sky-600 text-white text-sm rounded hover:bg-sky-700 transition-colors"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="w-4 h-4" />
           Add Your First Property
         </Link>
       </div>
@@ -538,15 +540,15 @@ export default function Calendar() {
   }
 
   return (
-    <div>
+    <div className="space-y-4">
       {renderHeader()}
       {isLoading ? (
         <div className="flex items-center justify-center h-96">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="w-8 h-8 border-2 border-stone-200 border-t-sky-600 rounded-full animate-spin"></div>
         </div>
       ) : (
         <>
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-white border border-stone-200 rounded overflow-hidden">
             {renderDays()}
             {renderCells()}
           </div>

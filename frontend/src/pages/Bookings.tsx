@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Trash2 } from 'lucide-react';
-import DataTable from '../components/DataTable';
+import { Plus, Search, Trash2, MoreHorizontal, Check, Minus, X } from 'lucide-react';
 import { api } from '../api/client';
-// Types defined inline
+
 type Property = { id: string; name: string; };
 type Channel = { id: string; name: string; color_hex: string; };
 type Booking = {
@@ -64,10 +63,9 @@ export default function Bookings() {
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-AE', {
-      style: 'currency',
-      currency: 'AED',
       minimumFractionDigits: 0,
-    }).format(value);
+      maximumFractionDigits: 0,
+    }).format(value || 0);
   };
 
   const formatDate = (dateStr: string) => {
@@ -80,13 +78,13 @@ export default function Bookings() {
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      confirmed: 'bg-green-100 text-green-800',
-      pending: 'bg-yellow-100 text-yellow-800',
-      cancelled: 'bg-red-100 text-red-800',
-      completed: 'bg-blue-100 text-blue-800',
-      checked_in: 'bg-purple-100 text-purple-800',
+      confirmed: 'bg-green-50 text-green-700',
+      pending: 'bg-amber-50 text-amber-700',
+      cancelled: 'bg-red-50 text-red-700',
+      completed: 'bg-sky-50 text-sky-700',
+      checked_in: 'bg-sky-50 text-sky-700',
     };
-    return colors[status] || 'bg-gray-100 text-gray-800';
+    return colors[status] || 'bg-stone-100 text-stone-600';
   };
 
   const handleDelete = async (bookingId: string, e: React.MouseEvent) => {
@@ -115,157 +113,140 @@ export default function Bookings() {
     return true;
   });
 
-  const totalBookings = filteredBookings.length;
-
-  const columns = [
-    {
-      key: 'guest_name',
-      header: 'Guest',
-      render: (booking: Booking) => (
-        <div>
-          <div className="font-medium">{booking.guest_name || 'N/A'}</div>
-          <div className="text-xs text-gray-500">{booking.booking_ref}</div>
-        </div>
-      ),
-    },
-    {
-      key: 'channel_id',
-      header: 'Channel',
-      render: (booking: Booking) => getChannelName(booking.channel_id),
-    },
-    {
-      key: 'check_in',
-      header: 'Check In',
-      render: (booking: Booking) => formatDate(booking.check_in),
-    },
-    {
-      key: 'check_out',
-      header: 'Check Out',
-      render: (booking: Booking) => formatDate(booking.check_out),
-    },
-    {
-      key: 'nights',
-      header: 'Nights',
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (booking: Booking) => (
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-          {booking.status}
-        </span>
-      ),
-    },
-    {
-      key: 'net_revenue',
-      header: 'Net Revenue',
-      render: (booking: Booking) => formatCurrency(booking.net_revenue || 0),
-    },
-    {
-      key: 'is_paid',
-      header: 'Paid',
-      render: (booking: Booking) => (
-        <span className={booking.is_paid ? 'text-green-600' : 'text-red-600'}>
-          {booking.is_paid ? '✓' : '✗'}
-        </span>
-      ),
-    },
-    {
-      key: 'actions',
-      header: '',
-      render: (booking: Booking) => (
-        <button
-          onClick={(e) => handleDelete(booking.id, e)}
-          className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg"
-          title="Delete"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      ),
-    },
-  ];
-
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Bookings</h1>
-          <p className="text-gray-500">
-            {totalBookings} bookings
-            {(filters.property_id || filters.status || filters.search) && (
-              <span className="text-blue-600 ml-2">(filtered)</span>
-            )}
-          </p>
+          <h1 className="text-lg font-semibold text-stone-900">Bookings</h1>
+          <p className="text-sm text-stone-500">{filteredBookings.length} bookings</p>
         </div>
         <button
           onClick={() => {
             setSelectedBooking(null);
             setShowForm(true);
           }}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="inline-flex items-center gap-2 px-3 py-1.5 bg-sky-600 text-white text-sm font-medium rounded hover:bg-sky-700 transition-colors"
         >
-          <Plus className="w-5 h-5 mr-2" />
+          <Plus className="w-4 h-4" />
           Add Booking
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm p-4">
-        <div className="flex flex-wrap gap-4">
-          <div className="flex-1 min-w-[200px]">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search guest name or booking ref..."
-                value={filters.search}
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          <select
-            value={filters.property_id}
-            onChange={(e) => setFilters({ ...filters, property_id: e.target.value })}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Properties</option>
-            {properties.map((property) => (
-              <option key={property.id} value={property.id}>
-                {property.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filters.status}
-            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Status</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="pending">Pending</option>
-            <option value="checked_in">Checked In</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+      {/* Filters bar */}
+      <div className="flex items-center gap-3 py-2">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+          <input
+            type="text"
+            placeholder="Search guest or ref..."
+            value={filters.search}
+            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            className="w-full pl-9 pr-3 py-1.5 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+          />
         </div>
+        <select
+          value={filters.property_id}
+          onChange={(e) => setFilters({ ...filters, property_id: e.target.value })}
+          className="text-sm border border-stone-300 rounded px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+        >
+          <option value="">All Properties</option>
+          {properties.map((property) => (
+            <option key={property.id} value={property.id}>
+              {property.name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={filters.status}
+          onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+          className="text-sm border border-stone-300 rounded px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+        >
+          <option value="">All Status</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="pending">Pending</option>
+          <option value="checked_in">Checked In</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm">
-        <DataTable
-          columns={columns}
-          data={filteredBookings}
-          onRowClick={(booking) => {
-            setSelectedBooking(booking);
-            setShowForm(true);
-          }}
-        />
+      <div className="bg-white border border-stone-200 rounded-lg overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-stone-50 border-b border-stone-200">
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Guest</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Channel</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Check In</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Check Out</th>
+              <th className="px-4 py-2.5 text-right text-xs font-medium text-stone-500 uppercase tracking-wide">Nights</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Status</th>
+              <th className="px-4 py-2.5 text-right text-xs font-medium text-stone-500 uppercase tracking-wide">Revenue</th>
+              <th className="px-4 py-2.5 text-center text-xs font-medium text-stone-500 uppercase tracking-wide">Paid</th>
+              <th className="px-4 py-2.5"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-100">
+            {filteredBookings.map((booking) => (
+              <tr
+                key={booking.id}
+                className="hover:bg-stone-50 cursor-pointer"
+                onClick={() => {
+                  setSelectedBooking(booking);
+                  setShowForm(true);
+                }}
+              >
+                <td className="px-4 py-2.5">
+                  <div className="text-sm font-medium text-stone-900">{booking.guest_name || 'N/A'}</div>
+                  <div className="text-xs text-stone-500">{booking.booking_ref}</div>
+                </td>
+                <td className="px-4 py-2.5 text-sm text-stone-600">{getChannelName(booking.channel_id)}</td>
+                <td className="px-4 py-2.5 text-sm text-stone-600 tabular-nums">{formatDate(booking.check_in)}</td>
+                <td className="px-4 py-2.5 text-sm text-stone-600 tabular-nums">{formatDate(booking.check_out)}</td>
+                <td className="px-4 py-2.5 text-sm text-stone-600 text-right tabular-nums">{booking.nights}</td>
+                <td className="px-4 py-2.5">
+                  <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(booking.status)}`}>
+                    {booking.status}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-sm font-medium text-stone-900 text-right tabular-nums">
+                  AED {formatCurrency(booking.net_revenue)}
+                </td>
+                <td className="px-4 py-2.5 text-center">
+                  {booking.is_paid ? (
+                    <Check className="w-4 h-4 text-green-600 mx-auto" />
+                  ) : (
+                    <Minus className="w-4 h-4 text-stone-300 mx-auto" />
+                  )}
+                </td>
+                <td className="px-4 py-2.5">
+                  <button
+                    onClick={(e) => handleDelete(booking.id, e)}
+                    className="p-1 text-stone-400 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {filteredBookings.length === 0 && (
+              <tr>
+                <td colSpan={9} className="px-4 py-12 text-center text-stone-500">
+                  No bookings found
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Booking Form Modal */}
@@ -315,7 +296,6 @@ function BookingForm({ booking, properties, channels, onClose, onSave }: Booking
     e.preventDefault();
     setSaving(true);
 
-    // Clean up the data - convert NaN to 0
     const cleanData = {
       ...formData,
       nightly_rate: formData.nightly_rate || 0,
@@ -338,19 +318,29 @@ function BookingForm({ booking, properties, channels, onClose, onSave }: Booking
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-bold">{booking ? 'Edit Booking' : 'New Booking'}</h2>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+        {/* Backdrop */}
+        <div className="fixed inset-0 bg-black/30" onClick={onClose} />
+
+        {/* Modal */}
+        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-stone-900">{booking ? 'Edit Booking' : 'New Booking'}</h2>
+            <button onClick={onClose} className="p-1 text-stone-400 hover:text-stone-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-4 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Property</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Property</label>
               <select
                 value={formData.property_id}
                 onChange={(e) => setFormData({ ...formData, property_id: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                 required
               >
                 {properties.map((p) => (
@@ -359,11 +349,11 @@ function BookingForm({ booking, properties, channels, onClose, onSave }: Booking
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Channel</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Channel</label>
               <select
                 value={formData.channel_id}
                 onChange={(e) => setFormData({ ...formData, channel_id: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                 required
               >
                 {channels.map((c) => (
@@ -372,83 +362,83 @@ function BookingForm({ booking, properties, channels, onClose, onSave }: Booking
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Booking Ref</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Booking Ref</label>
               <input
                 type="text"
                 value={formData.booking_ref}
                 onChange={(e) => setFormData({ ...formData, booking_ref: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Guest Name</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Guest Name</label>
               <input
                 type="text"
                 value={formData.guest_name}
                 onChange={(e) => setFormData({ ...formData, guest_name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Check In</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Check In</label>
               <input
                 type="date"
                 value={formData.check_in}
                 onChange={(e) => setFormData({ ...formData, check_in: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Check Out</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Check Out</label>
               <input
                 type="date"
                 value={formData.check_out}
                 onChange={(e) => setFormData({ ...formData, check_out: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nightly Rate (AED)</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Nightly Rate (AED)</label>
               <input
                 type="number"
                 value={formData.nightly_rate}
                 onChange={(e) => setFormData({ ...formData, nightly_rate: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                 required
                 min="0"
                 step="0.01"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cleaning Fee (AED)</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Cleaning Fee (AED)</label>
               <input
                 type="number"
                 value={formData.cleaning_fee}
                 onChange={(e) => setFormData({ ...formData, cleaning_fee: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                 min="0"
                 step="0.01"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Platform Commission (AED)</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Platform Commission (AED)</label>
               <input
                 type="number"
                 value={formData.platform_commission}
                 onChange={(e) => setFormData({ ...formData, platform_commission: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                 min="0"
                 step="0.01"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Status</label>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
               >
                 <option value="pending">Pending</option>
                 <option value="confirmed">Confirmed</option>
@@ -464,27 +454,30 @@ function BookingForm({ booking, properties, channels, onClose, onSave }: Booking
               id="is_paid"
               checked={formData.is_paid}
               onChange={(e) => setFormData({ ...formData, is_paid: e.target.checked })}
-              className="w-4 h-4 text-blue-600 rounded"
+              className="w-4 h-4 text-sky-600 rounded border-stone-300 focus:ring-sky-500"
             />
-            <label htmlFor="is_paid" className="ml-2 text-sm text-gray-700">Payment Received</label>
+            <label htmlFor="is_paid" className="ml-2 text-sm text-stone-700">Payment Received</label>
           </div>
-          <div className="flex justify-end gap-3 pt-4 border-t">
+
+          {/* Footer */}
+          <div className="px-4 py-3 border-t border-stone-200 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="px-3 py-1.5 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded disabled:opacity-50 transition-colors"
             >
               {saving ? 'Saving...' : 'Save Booking'}
             </button>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );
