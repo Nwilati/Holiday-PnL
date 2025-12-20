@@ -262,10 +262,14 @@ class Tenancy(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'))
 
+    # Deposit tracking
+    deposit_status = Column(String(20), default='pending')  # pending, received, partially_refunded, refunded, forfeited
+
     # Relationships
     property = relationship("Property", back_populates="tenancies")
     cheques = relationship("TenancyCheque", back_populates="tenancy", cascade="all, delete-orphan")
     documents = relationship("TenancyDocument", back_populates="tenancy", cascade="all, delete-orphan")
+    deposit_transactions = relationship("DepositTransaction", back_populates="tenancy", cascade="all, delete-orphan")
     previous_tenancy = relationship("Tenancy", remote_side=[id], backref="renewed_tenancy")
 
 
@@ -428,3 +432,26 @@ class DTCMPayment(Base):
 
     # Relationships
     property = relationship("Property")
+
+
+# ============================================================================
+# DEPOSIT TRANSACTION MODEL
+# ============================================================================
+
+class DepositTransaction(Base):
+    __tablename__ = "deposit_transactions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenancy_id = Column(UUID(as_uuid=True), ForeignKey("tenancies.id", ondelete="CASCADE"), nullable=False)
+    transaction_type = Column(String(20), nullable=False)  # received, deduction, refund
+    amount = Column(Numeric(10, 2), nullable=False)
+    transaction_date = Column(Date, nullable=False)
+    description = Column(Text)
+    deduction_reason = Column(String(50))  # damages, cleaning, unpaid_rent, other
+    journal_entry_id = Column(UUID(as_uuid=True), ForeignKey("journal_entries.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+
+    # Relationships
+    tenancy = relationship("Tenancy", back_populates="deposit_transactions")
+    journal_entry = relationship("JournalEntry")

@@ -12,6 +12,10 @@ import {
   AlertTriangle,
   Banknote,
   Eye,
+  Shield,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  MinusCircle,
 } from 'lucide-react';
 import { api } from '../api/client';
 
@@ -42,6 +46,18 @@ interface Document {
   file_size?: number;
   mime_type?: string;
   uploaded_at: string;
+}
+
+interface DepositTransaction {
+  id: string;
+  tenancy_id: string;
+  transaction_type: 'received' | 'deduction' | 'refund';
+  amount: number;
+  transaction_date: string;
+  description?: string;
+  deduction_reason?: string;
+  journal_entry_id?: string;
+  created_at: string;
 }
 
 interface Tenancy {
