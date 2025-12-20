@@ -363,10 +363,12 @@ class ExpenseBreakdown(BaseModel):
 # ============================================================================
 
 class TenancyChequeBase(BaseModel):
-    cheque_number: str
-    bank_name: str
+    payment_method: Literal['cheque', 'bank_transfer', 'cash'] = 'cheque'
     amount: Decimal
     due_date: date
+    cheque_number: Optional[str] = None  # Required only for cheques
+    bank_name: Optional[str] = None  # Required only for cheques
+    reference_number: Optional[str] = None  # For bank transfers
     status: Literal['pending', 'deposited', 'cleared', 'bounced'] = 'pending'
     deposited_date: Optional[date] = None
     cleared_date: Optional[date] = None
@@ -377,8 +379,10 @@ class TenancyChequeCreate(TenancyChequeBase):
     pass
 
 class TenancyChequeUpdate(BaseModel):
+    payment_method: Optional[Literal['cheque', 'bank_transfer', 'cash']] = None
     cheque_number: Optional[str] = None
     bank_name: Optional[str] = None
+    reference_number: Optional[str] = None
     amount: Optional[Decimal] = None
     due_date: Optional[date] = None
     status: Optional[Literal['pending', 'deposited', 'cleared', 'bounced']] = None
@@ -387,9 +391,20 @@ class TenancyChequeUpdate(BaseModel):
     bounce_reason: Optional[str] = None
     notes: Optional[str] = None
 
-class TenancyChequeResponse(TenancyChequeBase):
+class TenancyChequeResponse(BaseModel):
     id: UUID
     tenancy_id: UUID
+    payment_method: Optional[str] = 'cheque'
+    cheque_number: Optional[str] = None
+    bank_name: Optional[str] = None
+    reference_number: Optional[str] = None
+    amount: Decimal
+    due_date: date
+    status: str
+    deposited_date: Optional[date] = None
+    cleared_date: Optional[date] = None
+    bounce_reason: Optional[str] = None
+    notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -443,10 +458,12 @@ class TenancyBase(BaseModel):
     notes: Optional[str] = None
 
 class TenancyChequeInput(BaseModel):
-    cheque_number: str
-    bank_name: str
+    payment_method: Literal['cheque', 'bank_transfer', 'cash'] = 'cheque'
     amount: Decimal
     due_date: date
+    cheque_number: Optional[str] = None  # Required only for cheques
+    bank_name: Optional[str] = None  # Required only for cheques
+    reference_number: Optional[str] = None  # For bank transfers
 
 class TenancyCreate(TenancyBase):
     cheques: Optional[List[TenancyChequeInput]] = None  # Manual cheque entry (optional)
@@ -525,8 +542,10 @@ class UpcomingCheque(BaseModel):
     property_id: UUID
     property_name: str
     tenant_name: str
-    cheque_number: str
-    bank_name: str
+    payment_method: Optional[str] = 'cheque'
+    cheque_number: Optional[str] = None
+    bank_name: Optional[str] = None
+    reference_number: Optional[str] = None
     amount: Decimal
     due_date: date
     status: str

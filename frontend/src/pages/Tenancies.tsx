@@ -23,8 +23,10 @@ interface Property {
 interface Cheque {
   id: string;
   tenancy_id: string;
-  cheque_number: string;
-  bank_name: string;
+  payment_method?: 'cheque' | 'bank_transfer' | 'cash';
+  cheque_number?: string;
+  bank_name?: string;
+  reference_number?: string;
   amount: number;
   due_date: string;
   status: string;
@@ -84,6 +86,23 @@ const getStatusColor = (status: string) => {
     renewed: 'bg-sky-50 text-sky-700 border border-sky-200',
   };
   return colors[status.toLowerCase()] || 'bg-stone-100 text-stone-600 border border-stone-200';
+};
+
+// Payment method configuration
+const PAYMENT_METHOD_CONFIG = {
+  cheque: { label: 'Cheque', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  bank_transfer: { label: 'Bank Transfer', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+  cash: { label: 'Cash', color: 'bg-green-50 text-green-700 border-green-200' },
+};
+
+// Payment method badge component
+const PaymentMethodBadge = ({ method }: { method?: string }) => {
+  const config = PAYMENT_METHOD_CONFIG[method as keyof typeof PAYMENT_METHOD_CONFIG] || PAYMENT_METHOD_CONFIG.cheque;
+  return (
+    <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded border ${config.color}`}>
+      {config.label}
+    </span>
+  );
 };
 
 const DOCUMENT_TYPES = [
@@ -151,8 +170,10 @@ export default function Tenancies() {
   // Cheque editing
   const [editingChequeId, setEditingChequeId] = useState<string | null>(null);
   const [editChequeData, setEditChequeData] = useState({
+    payment_method: 'cheque' as 'cheque' | 'bank_transfer' | 'cash',
     cheque_number: '',
     bank_name: '',
+    reference_number: '',
     due_date: '',
     amount: 0,
   });
@@ -431,8 +452,10 @@ export default function Tenancies() {
   const handleEditCheque = (cheque: Cheque) => {
     setEditingChequeId(cheque.id);
     setEditChequeData({
-      cheque_number: cheque.cheque_number,
-      bank_name: cheque.bank_name,
+      payment_method: cheque.payment_method || 'cheque',
+      cheque_number: cheque.cheque_number || '',
+      bank_name: cheque.bank_name || '',
+      reference_number: cheque.reference_number || '',
       due_date: cheque.due_date,
       amount: cheque.amount,
     });
@@ -441,8 +464,10 @@ export default function Tenancies() {
   const handleCancelEditCheque = () => {
     setEditingChequeId(null);
     setEditChequeData({
+      payment_method: 'cheque',
       cheque_number: '',
       bank_name: '',
+      reference_number: '',
       due_date: '',
       amount: 0,
     });
@@ -453,8 +478,10 @@ export default function Tenancies() {
 
     try {
       await api.updateCheque(selectedTenancy.id, editingChequeId, {
-        cheque_number: editChequeData.cheque_number,
-        bank_name: editChequeData.bank_name,
+        payment_method: editChequeData.payment_method,
+        cheque_number: editChequeData.payment_method === 'cheque' ? editChequeData.cheque_number : undefined,
+        bank_name: editChequeData.payment_method === 'cheque' ? editChequeData.bank_name : undefined,
+        reference_number: editChequeData.payment_method === 'bank_transfer' ? editChequeData.reference_number : undefined,
         due_date: editChequeData.due_date,
         amount: Number(editChequeData.amount),
       });
@@ -933,26 +960,58 @@ export default function Tenancies() {
                       <div key={cheque.id} className="p-3 bg-stone-50 rounded-lg border border-stone-200">
                         {editingChequeId === cheque.id ? (
                           <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-xs font-medium text-stone-500 mb-1">Cheque Number</label>
-                                <input
-                                  type="text"
-                                  value={editChequeData.cheque_number}
-                                  onChange={(e) => setEditChequeData({ ...editChequeData, cheque_number: e.target.value })}
-                                  className="w-full px-3 py-1.5 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs font-medium text-stone-500 mb-1">Bank Name</label>
-                                <input
-                                  type="text"
-                                  value={editChequeData.bank_name}
-                                  onChange={(e) => setEditChequeData({ ...editChequeData, bank_name: e.target.value })}
-                                  className="w-full px-3 py-1.5 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                                />
-                              </div>
+                            {/* Payment Method */}
+                            <div>
+                              <label className="block text-xs font-medium text-stone-500 mb-1">Payment Method</label>
+                              <select
+                                value={editChequeData.payment_method}
+                                onChange={(e) => setEditChequeData({ ...editChequeData, payment_method: e.target.value as 'cheque' | 'bank_transfer' | 'cash' })}
+                                className="w-full px-3 py-1.5 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                              >
+                                <option value="cheque">Cheque</option>
+                                <option value="bank_transfer">Bank Transfer</option>
+                                <option value="cash">Cash</option>
+                              </select>
                             </div>
+
+                            {/* Cheque-specific fields */}
+                            {editChequeData.payment_method === 'cheque' && (
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs font-medium text-stone-500 mb-1">Cheque Number</label>
+                                  <input
+                                    type="text"
+                                    value={editChequeData.cheque_number}
+                                    onChange={(e) => setEditChequeData({ ...editChequeData, cheque_number: e.target.value })}
+                                    className="w-full px-3 py-1.5 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-stone-500 mb-1">Bank Name</label>
+                                  <input
+                                    type="text"
+                                    value={editChequeData.bank_name}
+                                    onChange={(e) => setEditChequeData({ ...editChequeData, bank_name: e.target.value })}
+                                    className="w-full px-3 py-1.5 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Bank Transfer-specific fields */}
+                            {editChequeData.payment_method === 'bank_transfer' && (
+                              <div>
+                                <label className="block text-xs font-medium text-stone-500 mb-1">Reference Number</label>
+                                <input
+                                  type="text"
+                                  value={editChequeData.reference_number}
+                                  onChange={(e) => setEditChequeData({ ...editChequeData, reference_number: e.target.value })}
+                                  className="w-full px-3 py-1.5 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                                  placeholder="Transaction reference"
+                                />
+                              </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-3">
                               <div>
                                 <label className="block text-xs font-medium text-stone-500 mb-1">Due Date</label>
@@ -994,9 +1053,14 @@ export default function Tenancies() {
                               <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(cheque.status)}`}>
                                 {cheque.status.charAt(0).toUpperCase() + cheque.status.slice(1)}
                               </span>
+                              <PaymentMethodBadge method={cheque.payment_method} />
                               <div>
                                 <p className="text-sm font-medium text-stone-800">
-                                  {cheque.cheque_number} - {cheque.bank_name}
+                                  {cheque.payment_method === 'cheque' && cheque.cheque_number && cheque.bank_name
+                                    ? `${cheque.cheque_number} - ${cheque.bank_name}`
+                                    : cheque.payment_method === 'bank_transfer' && cheque.reference_number
+                                    ? `Ref: ${cheque.reference_number}`
+                                    : 'Cash Payment'}
                                 </p>
                                 <p className="text-xs text-stone-500">Due: {formatDate(cheque.due_date)}</p>
                               </div>

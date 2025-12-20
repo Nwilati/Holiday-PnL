@@ -37,8 +37,10 @@ axiosInstance.interceptors.response.use(
 export interface TenancyCheque {
   id: string;
   tenancy_id: string;
-  cheque_number: string;
-  bank_name: string;
+  payment_method?: 'cheque' | 'bank_transfer' | 'cash';
+  cheque_number?: string;
+  bank_name?: string;
+  reference_number?: string;
   amount: number;
   due_date: string;
   status: 'pending' | 'deposited' | 'cleared' | 'bounced';
@@ -131,8 +133,10 @@ export interface UpcomingCheque {
   property_id: string;
   property_name: string;
   tenant_name: string;
-  cheque_number: string;
-  bank_name: string;
+  payment_method?: 'cheque' | 'bank_transfer' | 'cash';
+  cheque_number?: string;
+  bank_name?: string;
+  reference_number?: string;
   amount: number;
   due_date: string;
   status: string;
