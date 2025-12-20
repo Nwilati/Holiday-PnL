@@ -73,7 +73,7 @@ export interface Tenancy {
   annual_rent: number;
   contract_value: number;
   security_deposit: number;
-  num_cheques: 1 | 2 | 3 | 4 | 6 | 12;
+  num_cheques: 0 | 1 | 2 | 3 | 4 | 6 | 12;
   ejari_number?: string;
   status: 'active' | 'expired' | 'terminated' | 'renewed';
   previous_tenancy_id?: string;
@@ -97,7 +97,7 @@ export interface TenancyCreateInput {
   annual_rent: number;
   contract_value: number;
   security_deposit?: number;
-  num_cheques: 1 | 2 | 3 | 4 | 6 | 12;
+  num_cheques: 0 | 1 | 2 | 3 | 4 | 6 | 12;
   ejari_number?: string;
   notes?: string;
   cheques?: {
@@ -115,7 +115,7 @@ export interface TenancyRenewInput {
   annual_rent: number;
   contract_value: number;
   security_deposit?: number;
-  num_cheques: 1 | 2 | 3 | 4 | 6 | 12;
+  num_cheques: 0 | 1 | 2 | 3 | 4 | 6 | 12;
   ejari_number?: string;
   notes?: string;
   cheques?: {

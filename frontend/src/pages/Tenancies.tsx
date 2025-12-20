@@ -178,6 +178,18 @@ export default function Tenancies() {
     amount: 0,
   });
 
+  // Add payment
+  const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
+  const [newPaymentData, setNewPaymentData] = useState({
+    payment_method: 'bank_transfer' as 'cheque' | 'bank_transfer' | 'cash',
+    amount: '',
+    due_date: '',
+    cheque_number: '',
+    bank_name: '',
+    reference_number: '',
+    status: 'pending',
+  });
+
   useEffect(() => {
     loadProperties();
   }, []);
@@ -311,7 +323,7 @@ export default function Tenancies() {
         annual_rent: Number(formData.annual_rent),
         contract_value: Number(formData.contract_value),
         security_deposit: Number(formData.security_deposit),
-        num_cheques: Number(formData.num_cheques) as 1 | 2 | 3 | 4 | 6 | 12,
+        num_cheques: Number(formData.num_cheques) as 0 | 1 | 2 | 3 | 4 | 6 | 12,
         ejari_number: formData.ejari_number || null,
         notes: formData.notes || null,
         auto_split_cheques: formData.auto_split_cheques,
@@ -357,7 +369,7 @@ export default function Tenancies() {
         ...renewalData,
         annual_rent: Number(renewalData.annual_rent),
         contract_value: Number(renewalData.annual_rent),
-        num_cheques: Number(renewalData.num_cheques) as 1 | 2 | 3 | 4 | 6 | 12,
+        num_cheques: Number(renewalData.num_cheques) as 0 | 1 | 2 | 3 | 4 | 6 | 12,
       });
       setShowRenewalModal(false);
       loadTenancies();
@@ -550,6 +562,46 @@ export default function Tenancies() {
       }
     } catch (error) {
       console.error('Failed to delete document:', error);
+    }
+  };
+
+  // Add payment
+  const handleAddPayment = async () => {
+    if (!selectedTenancy || !newPaymentData.amount || !newPaymentData.due_date) {
+      alert('Please fill in required fields');
+      return;
+    }
+
+    try {
+      await api.post(`/tenancies/${selectedTenancy.id}/cheques`, {
+        payment_method: newPaymentData.payment_method,
+        amount: parseFloat(newPaymentData.amount),
+        due_date: newPaymentData.due_date,
+        cheque_number: newPaymentData.payment_method === 'cheque' ? newPaymentData.cheque_number || null : null,
+        bank_name: newPaymentData.payment_method === 'cheque' ? newPaymentData.bank_name || null : null,
+        reference_number: newPaymentData.payment_method === 'bank_transfer' ? newPaymentData.reference_number || null : null,
+        status: newPaymentData.status,
+      });
+
+      // Reset form
+      setNewPaymentData({
+        payment_method: 'bank_transfer',
+        amount: '',
+        due_date: '',
+        cheque_number: '',
+        bank_name: '',
+        reference_number: '',
+        status: 'pending',
+      });
+      setShowAddPaymentModal(false);
+
+      // Refresh tenancy data
+      const response = await api.getTenancy(selectedTenancy.id);
+      setSelectedTenancy(response.data as any);
+      loadTenancies();
+    } catch (error) {
+      console.error('Failed to add payment:', error);
+      alert('Failed to add payment. Please try again.');
     }
   };
 
@@ -849,18 +901,19 @@ export default function Tenancies() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-stone-700 mb-1">Number of Cheques *</label>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Auto-Generate Payments</label>
                     <select
                       value={formData.num_cheques}
                       onChange={(e) => setFormData({ ...formData, num_cheques: Number(e.target.value) })}
                       className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                     >
-                      <option value={1}>1 Cheque</option>
-                      <option value={2}>2 Cheques</option>
-                      <option value={3}>3 Cheques</option>
-                      <option value={4}>4 Cheques</option>
-                      <option value={6}>6 Cheques</option>
-                      <option value={12}>12 Cheques</option>
+                      <option value={0}>None - I'll add payments manually</option>
+                      <option value={1}>1 Payment</option>
+                      <option value={2}>2 Payments</option>
+                      <option value={3}>3 Payments</option>
+                      <option value={4}>4 Payments</option>
+                      <option value={6}>6 Payments</option>
+                      <option value={12}>12 Payments</option>
                     </select>
                   </div>
                   <div>
@@ -875,9 +928,15 @@ export default function Tenancies() {
                   </div>
                 </div>
 
-                {!selectedTenancy && formData.num_cheques > 1 && (
+                {!selectedTenancy && formData.num_cheques > 0 && (
                   <div className="bg-sky-50 p-3 rounded text-sm text-sky-700">
-                    <strong>Auto-split enabled:</strong> {formData.num_cheques} cheques of AED {formatCurrency(formData.annual_rent / formData.num_cheques)} each will be created automatically.
+                    <strong>Auto-split enabled:</strong> {formData.num_cheques} payment{formData.num_cheques > 1 ? 's' : ''} of AED {formatCurrency(formData.annual_rent / formData.num_cheques)} each will be created automatically.
+                  </div>
+                )}
+
+                {!selectedTenancy && formData.num_cheques === 0 && (
+                  <div className="bg-amber-50 p-3 rounded text-sm text-amber-700">
+                    <strong>Manual payments:</strong> No payments will be auto-generated. You can add payments with different amounts and methods after creating the tenancy.
                   </div>
                 )}
 
@@ -938,7 +997,7 @@ export default function Tenancies() {
                         : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
                     }`}
                   >
-                    Cheques ({selectedTenancy.cheques?.length || 0})
+                    Payments ({selectedTenancy.cheques?.length || 0})
                   </button>
                   <button
                     onClick={() => setDetailsTab('documents')}
@@ -956,6 +1015,16 @@ export default function Tenancies() {
               <div className="p-4">
                 {detailsTab === 'cheques' && (
                   <div className="space-y-2">
+                    {/* Add Payment button */}
+                    <div className="flex justify-end mb-3">
+                      <button
+                        onClick={() => setShowAddPaymentModal(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-sky-600 text-white rounded hover:bg-sky-700 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Payment
+                      </button>
+                    </div>
                     {selectedTenancy.cheques?.map((cheque) => (
                       <div key={cheque.id} className="p-3 bg-stone-50 rounded-lg border border-stone-200">
                         {editingChequeId === cheque.id ? (
@@ -1234,18 +1303,19 @@ export default function Tenancies() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">Number of Cheques</label>
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Auto-Generate Payments</label>
                   <select
                     value={renewalData.num_cheques}
                     onChange={(e) => setRenewalData({ ...renewalData, num_cheques: Number(e.target.value) })}
                     className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                   >
-                    <option value={1}>1 Cheque</option>
-                    <option value={2}>2 Cheques</option>
-                    <option value={3}>3 Cheques</option>
-                    <option value={4}>4 Cheques</option>
-                    <option value={6}>6 Cheques</option>
-                    <option value={12}>12 Cheques</option>
+                    <option value={0}>None - I'll add payments manually</option>
+                    <option value={1}>1 Payment</option>
+                    <option value={2}>2 Payments</option>
+                    <option value={3}>3 Payments</option>
+                    <option value={4}>4 Payments</option>
+                    <option value={6}>6 Payments</option>
+                    <option value={12}>12 Payments</option>
                   </select>
                 </div>
               </div>
@@ -1364,6 +1434,129 @@ export default function Tenancies() {
                   className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded transition-colors"
                 >
                   Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Payment Modal */}
+      {showAddPaymentModal && selectedTenancy && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/30" onClick={() => setShowAddPaymentModal(false)} />
+            <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md">
+              <div className="px-4 py-3 border-b border-stone-200">
+                <h3 className="text-base font-semibold text-stone-800">Add Payment</h3>
+                <p className="text-xs text-stone-500">Add a new payment to this tenancy</p>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* Payment Method */}
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Payment Method *</label>
+                  <select
+                    value={newPaymentData.payment_method}
+                    onChange={(e) => setNewPaymentData({ ...newPaymentData, payment_method: e.target.value as 'cheque' | 'bank_transfer' | 'cash' })}
+                    className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  >
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                </div>
+
+                {/* Cheque-specific fields */}
+                {newPaymentData.payment_method === 'cheque' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">Cheque Number</label>
+                      <input
+                        type="text"
+                        value={newPaymentData.cheque_number}
+                        onChange={(e) => setNewPaymentData({ ...newPaymentData, cheque_number: e.target.value })}
+                        className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        placeholder="e.g. 001234"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">Bank Name</label>
+                      <input
+                        type="text"
+                        value={newPaymentData.bank_name}
+                        onChange={(e) => setNewPaymentData({ ...newPaymentData, bank_name: e.target.value })}
+                        className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        placeholder="e.g. Emirates NBD"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Bank Transfer-specific fields */}
+                {newPaymentData.payment_method === 'bank_transfer' && (
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Reference Number</label>
+                    <input
+                      type="text"
+                      value={newPaymentData.reference_number}
+                      onChange={(e) => setNewPaymentData({ ...newPaymentData, reference_number: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      placeholder="Transaction reference"
+                    />
+                  </div>
+                )}
+
+                {/* Amount and Due Date */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Amount (AED) *</label>
+                    <input
+                      type="number"
+                      value={newPaymentData.amount}
+                      onChange={(e) => setNewPaymentData({ ...newPaymentData, amount: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Due Date *</label>
+                    <input
+                      type="date"
+                      value={newPaymentData.due_date}
+                      onChange={(e) => setNewPaymentData({ ...newPaymentData, due_date: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Status */}
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Status</label>
+                  <select
+                    value={newPaymentData.status}
+                    onChange={(e) => setNewPaymentData({ ...newPaymentData, status: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="deposited">Deposited</option>
+                    <option value="cleared">Cleared</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="px-4 py-3 border-t border-stone-200 flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setShowAddPaymentModal(false)}
+                  className="px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddPayment}
+                  className="px-3 py-1.5 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded transition-colors"
+                >
+                  Add Payment
                 </button>
               </div>
             </div>
