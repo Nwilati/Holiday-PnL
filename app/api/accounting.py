@@ -717,7 +717,8 @@ def generate_expense_journal(expense_id: UUID, db: Session = Depends(get_db)):
         # Fall back to generic operating expenses if mapped account doesn't exist
         acc_expense = get_account_by_code(db, '5800')
 
-    acc_payable = get_account_by_code(db, '2100')     # Accounts Payable
+    # Cash basis: Credit Bank Account (expense is paid when recorded)
+    acc_bank = get_account_by_code(db, '1102')        # CBD Bank Account
 
     amount = Decimal(str(expense.amount or 0))
     vat = Decimal(str(expense.vat_amount or 0))
@@ -735,14 +736,14 @@ def generate_expense_journal(expense_id: UUID, db: Session = Depends(get_db)):
         description=expense.description or expense.vendor
     ))
 
-    # Line 2: Credit Payable
+    # Line 2: Credit Bank (Cash basis - paid when recorded)
     lines.append(JournalLineCreate(
-        account_id=acc_payable.id,
+        account_id=acc_bank.id,
         debit=Decimal('0'),
         credit=total,
         property_id=expense.property_id,
         expense_id=expense_id,
-        description=f"Payable to {expense.vendor}"
+        description=f"Paid from Bank - {expense.vendor}"
     ))
 
     entry_data = JournalEntryCreate(
