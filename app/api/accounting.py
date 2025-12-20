@@ -588,8 +588,8 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail=f"Journal entry already exists: {existing.entry_number}")
 
-    # Get accounts (matching seeded COA)
-    acc_receivable = get_account_by_code(db, '1201')      # OTA Receivables
+    # Get accounts (matching seeded COA) - Cash basis
+    acc_bank = get_account_by_code(db, '1102')            # CBD Bank Account (money received)
     acc_revenue = get_account_by_code(db, '4101')         # Nightly Rate Revenue
     acc_cleaning_rev = get_account_by_code(db, '4102')    # Cleaning Fee Revenue
     acc_commission = get_account_by_code(db, '5101')      # Platform Commission Expense
@@ -619,14 +619,14 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
     # Tourism dirham is a liability, not income
     accommodation_rev = gross - cleaning - tourism_dirham
 
-    # Line 1: Debit Receivable
+    # Line 1: Debit Bank (Cash basis - money received)
     lines.append(JournalLineCreate(
-        account_id=acc_receivable.id,
+        account_id=acc_bank.id,
         debit=net_receivable,
         credit=Decimal('0'),
         property_id=booking.property_id,
         booking_id=booking_id,
-        description=f"Receivable from {booking.guest_name}"
+        description=f"Payment received - {booking.guest_name}"
     ))
 
     # Line 2: Debit Commission Expense
