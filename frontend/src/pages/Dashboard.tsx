@@ -25,11 +25,12 @@ interface UpcomingCheque {
   tenancy_id: string;
   property_name: string;
   tenant_name: string;
-  cheque_number: string;
-  bank_name: string;
+  cheque_number?: string;
+  bank_name?: string;
   amount: number;
   due_date: string;
   days_until_due: number;
+  payment_method?: string;
 }
 
 interface AnnualRevenue {
