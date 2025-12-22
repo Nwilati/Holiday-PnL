@@ -1051,8 +1051,8 @@ def get_upcoming_cheques(
     sql = text("""
         SELECT
             c.id, c.tenancy_id, t.property_id, p.name as property_name,
-            t.tenant_name, c.cheque_number, c.bank_name, c.amount,
-            c.due_date, c.status::text as status
+            t.tenant_name, c.payment_method, c.cheque_number, c.bank_name,
+            c.reference_number, c.amount, c.due_date, c.status::text as status
         FROM tenancy_cheques c
         JOIN tenancies t ON c.tenancy_id = t.id
         JOIN properties p ON t.property_id = p.id
@@ -1080,8 +1080,10 @@ def get_upcoming_cheques(
             property_id=row.property_id,
             property_name=row.property_name,
             tenant_name=row.tenant_name,
+            payment_method=row.payment_method or 'cheque',
             cheque_number=row.cheque_number,
             bank_name=row.bank_name,
+            reference_number=row.reference_number,
             amount=row.amount,
             due_date=row.due_date,
             status=row.status,

@@ -726,7 +726,7 @@ export default function Tenancies() {
                     AED {formatCurrency(tenancy.annual_rent)}
                   </td>
                   <td className="px-4 py-2.5 text-sm text-stone-600 text-center tabular-nums">
-                    {tenancy.num_cheques}
+                    {tenancy.cheques?.length || 0}
                   </td>
                   <td className="px-4 py-2.5">
                     <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(tenancy.status)}`}>
@@ -1137,7 +1137,7 @@ export default function Tenancies() {
                             <div className="flex items-center gap-3">
                               <p className="text-sm font-semibold text-stone-800 tabular-nums">AED {formatCurrency(cheque.amount)}</p>
                               <div className="flex gap-1">
-                                {(cheque.status === 'pending' || cheque.status === 'deposited') && (
+                                {(cheque.status === 'pending' || cheque.status === 'deposited' || cheque.status === 'cleared') && (
                                   <button
                                     onClick={() => handleEditCheque(cheque)}
                                     className="px-2 py-1 text-xs bg-stone-200 text-stone-700 rounded hover:bg-stone-300"
