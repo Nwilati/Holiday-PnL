@@ -279,9 +279,14 @@ class TenancyCheque(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenancy_id = Column(UUID(as_uuid=True), ForeignKey('tenancies.id'), nullable=False)
 
-    # Cheque Details
-    cheque_number = Column(String(50), nullable=False)
-    bank_name = Column(String(100), nullable=False)
+    # Payment Method
+    payment_method = Column(String(20), default='cheque')  # 'cheque', 'bank_transfer', 'cash'
+
+    # Cheque Details (nullable for non-cheque payments)
+    cheque_number = Column(String(50), nullable=True)
+    bank_name = Column(String(100), nullable=True)
+    reference_number = Column(String(100), nullable=True)  # For bank transfers
+
     amount = Column(Numeric(12, 2), nullable=False)
     due_date = Column(Date, nullable=False)
 
