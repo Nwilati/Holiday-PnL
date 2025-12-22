@@ -204,7 +204,7 @@ async def create_dtcm_payment(
         reference=payment.reference,
         payment_method=payment.payment_method,
         notes=payment.notes,
-        created_by=current_user.id
+        created_by=current_user["id"]
     )
 
     db.add(db_payment)

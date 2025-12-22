@@ -166,7 +166,7 @@ async def create_deposit_transaction(
         description=transaction.description,
         deduction_reason=transaction.deduction_reason,
         journal_entry_id=journal_entry.id,
-        created_by=current_user.id
+        created_by=current_user["id"]
     )
     db.add(db_transaction)
 
