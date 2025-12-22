@@ -652,6 +652,48 @@ def get_tenancy_cheques(tenancy_id: UUID, db: Session = Depends(get_db)):
     return cheques
 
 
+@router.post("/{tenancy_id}/cheques", response_model=TenancyChequeResponse, status_code=status.HTTP_201_CREATED)
+def add_payment(
+    tenancy_id: UUID,
+    payment_data: TenancyChequeCreate,
+    db: Session = Depends(get_db)
+):
+    """Add a new payment (cheque, bank transfer, or cash) to a tenancy."""
+    tenancy = db.query(Tenancy).filter(Tenancy.id == tenancy_id).first()
+    if not tenancy:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenancy not found")
+
+    payment_id = uuid4()
+
+    sql = text("""
+        INSERT INTO tenancy_cheques (
+            id, tenancy_id, payment_method, cheque_number, bank_name,
+            reference_number, amount, due_date, status, notes
+        ) VALUES (
+            :id, :tenancy_id, :payment_method, :cheque_number, :bank_name,
+            :reference_number, :amount, :due_date,
+            CAST(:status AS cheque_status), :notes
+        )
+    """)
+
+    db.execute(sql, {
+        'id': payment_id,
+        'tenancy_id': tenancy_id,
+        'payment_method': payment_data.payment_method,
+        'cheque_number': payment_data.cheque_number,
+        'bank_name': payment_data.bank_name,
+        'reference_number': payment_data.reference_number,
+        'amount': payment_data.amount,
+        'due_date': payment_data.due_date,
+        'status': payment_data.status or 'pending',
+        'notes': payment_data.notes
+    })
+    db.commit()
+
+    payment = db.query(TenancyCheque).filter(TenancyCheque.id == payment_id).first()
+    return payment
+
+
 @router.put("/{tenancy_id}/cheques/{cheque_id}", response_model=TenancyChequeResponse)
 def update_cheque(
     tenancy_id: UUID,
