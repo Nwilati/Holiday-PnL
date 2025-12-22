@@ -453,7 +453,7 @@ class TenancyBase(BaseModel):
     annual_rent: Decimal
     contract_value: Decimal
     security_deposit: Decimal = Decimal("0")
-    num_cheques: Literal[1, 2, 3, 4, 6, 12]
+    num_cheques: Literal[0, 1, 2, 3, 4, 6, 12] = 1  # 0 = manual payments
     ejari_number: Optional[str] = None
     notes: Optional[str] = None
 
@@ -478,7 +478,7 @@ class TenancyUpdate(BaseModel):
     annual_rent: Optional[Decimal] = None
     contract_value: Optional[Decimal] = None
     security_deposit: Optional[Decimal] = None
-    num_cheques: Optional[Literal[1, 2, 3, 4, 6, 12]] = None
+    num_cheques: Optional[Literal[0, 1, 2, 3, 4, 6, 12]] = None
     ejari_number: Optional[str] = None
     notes: Optional[str] = None
 
@@ -514,7 +514,7 @@ class TenancyRenew(BaseModel):
     annual_rent: Decimal
     contract_value: Decimal
     security_deposit: Decimal = Decimal("0")
-    num_cheques: Literal[1, 2, 3, 4, 6, 12]
+    num_cheques: Literal[0, 1, 2, 3, 4, 6, 12] = 1  # 0 = manual payments
     ejari_number: Optional[str] = None
     notes: Optional[str] = None
     cheques: Optional[List[TenancyChequeInput]] = None

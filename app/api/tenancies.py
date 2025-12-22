@@ -243,8 +243,8 @@ def create_tenancy(tenancy_data: TenancyCreate, db: Session = Depends(get_db)):
                 'amount': cheque.amount,
                 'due_date': cheque.due_date
             })
-    elif tenancy_data.auto_split_cheques:
-        # Auto-generate cheque schedule
+    elif tenancy_data.auto_split_cheques and tenancy_data.num_cheques > 0:
+        # Auto-generate cheque schedule (skip if num_cheques = 0 for manual payments)
         cheques = calculate_cheque_schedule(
             tenancy_data.contract_start,
             tenancy_data.annual_rent,
@@ -400,35 +400,37 @@ def update_tenancy(tenancy_id: UUID, tenancy_data: TenancyUpdate, db: Session = 
             # Delete existing cheques (pending/deposited/bounced)
             db.query(TenancyCheque).filter(TenancyCheque.tenancy_id == tenancy_id).delete()
 
-            # Get updated values for cheque generation
-            new_annual_rent = update_data.get('annual_rent', old_annual_rent)
-            new_contract_start = update_data.get('contract_start', old_contract_start)
+            # Only regenerate cheques if new_num_cheques > 0 (0 = manual payments mode)
+            if new_num_cheques > 0:
+                # Get updated values for cheque generation
+                new_annual_rent = update_data.get('annual_rent', old_annual_rent)
+                new_contract_start = update_data.get('contract_start', old_contract_start)
 
-            # Create new cheques using the schedule calculator
-            cheque_schedule = calculate_cheque_schedule(
-                new_contract_start,
-                Decimal(str(new_annual_rent)),
-                new_num_cheques
-            )
+                # Create new cheques using the schedule calculator
+                cheque_schedule = calculate_cheque_schedule(
+                    new_contract_start,
+                    Decimal(str(new_annual_rent)),
+                    new_num_cheques
+                )
 
-            for cheque_data in cheque_schedule:
-                cheque_id = uuid4()
-                cheque_sql = text("""
-                    INSERT INTO tenancy_cheques (
-                        id, tenancy_id, cheque_number, bank_name, amount, due_date, status
-                    ) VALUES (
-                        :id, :tenancy_id, :cheque_number, :bank_name, :amount, :due_date,
-                        CAST('pending' AS cheque_status)
-                    )
-                """)
-                db.execute(cheque_sql, {
-                    'id': cheque_id,
-                    'tenancy_id': tenancy_id,
-                    'cheque_number': cheque_data['cheque_number'],
-                    'bank_name': cheque_data['bank_name'],
-                    'amount': cheque_data['amount'],
-                    'due_date': cheque_data['due_date']
-                })
+                for cheque_data in cheque_schedule:
+                    cheque_id = uuid4()
+                    cheque_sql = text("""
+                        INSERT INTO tenancy_cheques (
+                            id, tenancy_id, cheque_number, bank_name, amount, due_date, status
+                        ) VALUES (
+                            :id, :tenancy_id, :cheque_number, :bank_name, :amount, :due_date,
+                            CAST('pending' AS cheque_status)
+                        )
+                    """)
+                    db.execute(cheque_sql, {
+                        'id': cheque_id,
+                        'tenancy_id': tenancy_id,
+                        'cheque_number': cheque_data['cheque_number'],
+                        'bank_name': cheque_data['bank_name'],
+                        'amount': cheque_data['amount'],
+                        'due_date': cheque_data['due_date']
+                    })
 
         db.commit()
 
@@ -572,7 +574,8 @@ def renew_tenancy(tenancy_id: UUID, data: TenancyRenew, db: Session = Depends(ge
                 'amount': cheque.amount,
                 'due_date': cheque.due_date
             })
-    elif data.auto_split_cheques:
+    elif data.auto_split_cheques and data.num_cheques > 0:
+        # Auto-generate cheque schedule (skip if num_cheques = 0 for manual payments)
         cheques = calculate_cheque_schedule(data.contract_start, data.annual_rent, data.num_cheques)
         for cheque in cheques:
             cheque_id = uuid4()
