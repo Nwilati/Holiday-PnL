@@ -25,10 +25,10 @@ class UserCreate(BaseModel):
     role: Optional[str] = "viewer"
 
 class UserUpdate(BaseModel):
-    email: EmailStr
+    email: Optional[EmailStr] = None
     password: Optional[str] = None
     full_name: Optional[str] = None
-    role: Optional[str] = "viewer"
+    role: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -148,10 +148,16 @@ def list_users(db: Session = Depends(get_db), admin: dict = Depends(require_admi
 @router.put("/users/{user_id}", response_model=UserResponse)
 def update_user(user_id: str, user: UserUpdate, db: Session = Depends(get_db), admin: dict = Depends(require_admin)):
     """Update user - Admin only"""
-    # Check user exists
-    result = db.execute(text("SELECT id FROM users WHERE id = :id"), {"id": user_id})
-    if not result.fetchone():
+    # Check user exists and get current data
+    result = db.execute(text("SELECT id, email, full_name, role FROM users WHERE id = :id"), {"id": user_id})
+    existing = result.fetchone()
+    if not existing:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Use existing values if not provided
+    new_email = user.email if user.email else existing.email
+    new_full_name = user.full_name if user.full_name is not None else existing.full_name
+    new_role = user.role if user.role else existing.role
 
     # Update with or without password
     if user.password:
@@ -164,10 +170,10 @@ def update_user(user_id: str, user: UserUpdate, db: Session = Depends(get_db), a
             """),
             {
                 "id": user_id,
-                "email": user.email,
+                "email": new_email,
                 "password_hash": hashed_pw,
-                "full_name": user.full_name,
-                "role": user.role
+                "full_name": new_full_name,
+                "role": new_role
             }
         )
     else:
@@ -179,14 +185,14 @@ def update_user(user_id: str, user: UserUpdate, db: Session = Depends(get_db), a
             """),
             {
                 "id": user_id,
-                "email": user.email,
-                "full_name": user.full_name,
-                "role": user.role
+                "email": new_email,
+                "full_name": new_full_name,
+                "role": new_role
             }
         )
     db.commit()
 
-    return {"id": user_id, "email": user.email, "full_name": user.full_name, "role": user.role}
+    return {"id": user_id, "email": new_email, "full_name": new_full_name, "role": new_role}
 
 @router.delete("/users/{user_id}")
 def delete_user(user_id: str, db: Session = Depends(get_db), admin: dict = Depends(require_admin)):
