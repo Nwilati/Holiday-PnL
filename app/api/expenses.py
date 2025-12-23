@@ -141,11 +141,27 @@ def update_expense(expense_id: UUID, expense_data: ExpenseUpdate, db: Session = 
     db.refresh(expense)
     return expense
 
-@router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{expense_id}")
 def delete_expense(expense_id: UUID, db: Session = Depends(get_db)):
+    """Delete an expense and its related journal entries"""
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    # Delete related journal lines first
+    db.execute(
+        text("DELETE FROM journal_lines WHERE expense_id = :expense_id"),
+        {"expense_id": expense_id}
+    )
+
+    # Delete related receipts
+    db.execute(
+        text("DELETE FROM receipts WHERE expense_id = :expense_id"),
+        {"expense_id": expense_id}
+    )
+
+    # Now delete the expense
     db.delete(expense)
     db.commit()
-    return None
+
+    return {"message": "Expense deleted"}
