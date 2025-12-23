@@ -144,12 +144,12 @@ export default function Dashboard() {
           try {
             const kpiRes = await api.getKPIs(prop.id, startDate, endDate);
             const data = kpiRes.data;
-            allKpis.total_revenue += data.total_revenue || 0;
-            allKpis.net_revenue += data.net_revenue || 0;
-            allKpis.total_expenses += data.total_expenses || 0;
-            allKpis.noi += data.noi || 0;
-            allKpis.total_bookings += data.total_bookings || 0;
-            allKpis.total_nights += data.total_nights || 0;
+            allKpis.total_revenue += Number(data.total_revenue) || 0;
+            allKpis.net_revenue += Number(data.net_revenue) || 0;
+            allKpis.total_expenses += Number(data.total_expenses) || 0;
+            allKpis.noi += Number(data.noi) || 0;
+            allKpis.total_bookings += Number(data.total_bookings) || 0;
+            allKpis.total_nights += Number(data.total_nights) || 0;
           } catch (e) {
             console.error('Failed to load KPIs for property:', prop.id);
           }
