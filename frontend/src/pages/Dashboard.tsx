@@ -577,20 +577,25 @@ export default function Dashboard() {
             <span className="text-xs text-stone-500">vs {selectedYear - 1}</span>
           )}
         </div>
-        <div className="px-4 py-2 grid grid-cols-7 divide-x divide-stone-100">
+        <div className="px-4 py-2 grid grid-cols-4 divide-x divide-stone-100">
           <Metric
             label="Short-Term Revenue"
             value={Number(kpis?.total_revenue) || 0}
             trend={yoyChanges?.revenue}
           />
-          <Metric
-            label="Annual Rent (Expected)"
-            value={Number(annualRevenue?.total_contract_value) || 0}
-          />
-          <Metric
-            label="Annual Rent (Collected)"
-            value={Number(annualRevenue?.total_cleared) || 0}
-          />
+          <div className="pl-4">
+            <dt className="text-xs text-stone-500 uppercase tracking-wide">Annual Rent</dt>
+            <dd className="mt-1 flex items-baseline gap-4">
+              <div>
+                <span className="text-xs text-stone-400">Expected</span>
+                <p className="text-lg font-semibold text-stone-900">AED {formatAmount(Number(annualRevenue?.total_contract_value) || 0)}</p>
+              </div>
+              <div>
+                <span className="text-xs text-stone-400">Collected</span>
+                <p className="text-lg font-semibold text-green-700">AED {formatAmount(Number(annualRevenue?.total_cleared) || 0)}</p>
+              </div>
+            </dd>
+          </div>
           <Metric
             label="Combined Revenue"
             value={getCombinedRevenue()}
@@ -600,15 +605,29 @@ export default function Dashboard() {
             value={Number(kpis?.total_expenses) || 0}
             trend={yoyChanges?.expenses ? -yoyChanges.expenses : undefined}
           />
+        </div>
+        <div className="px-4 py-2 grid grid-cols-4 divide-x divide-stone-100 border-t border-stone-100">
           <Metric
             label="Net Operating Income"
             value={getCombinedNOI()}
             trend={yoyChanges?.noi}
           />
-          <div className="py-3 pl-4">
+          <div className="pl-4 py-3">
             <dt className="text-xs text-stone-500 uppercase tracking-wide">Occupancy</dt>
             <dd className="mt-1 text-xl font-semibold text-stone-900">
               {Math.round(Number(kpis?.occupancy_rate) || 0)}%
+            </dd>
+          </div>
+          <div className="pl-4 py-3">
+            <dt className="text-xs text-stone-500 uppercase tracking-wide">ADR</dt>
+            <dd className="mt-1 text-xl font-semibold text-stone-900">
+              AED {formatAmount(Number(kpis?.adr) || 0)}
+            </dd>
+          </div>
+          <div className="pl-4 py-3">
+            <dt className="text-xs text-stone-500 uppercase tracking-wide">Bookings</dt>
+            <dd className="mt-1 text-xl font-semibold text-stone-900">
+              {Number(kpis?.total_bookings) || 0}
             </dd>
           </div>
         </div>
