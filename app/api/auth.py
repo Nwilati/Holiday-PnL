@@ -148,7 +148,7 @@ def list_users(db: Session = Depends(get_db), admin: dict = Depends(require_admi
 @router.put("/users/{user_id}", response_model=UserResponse)
 def update_user(user_id: str, user: UserUpdate, db: Session = Depends(get_db), admin: dict = Depends(require_admin)):
     """Update user - Admin only"""
-    # Check user exists and get current data
+    # Check user exists
     result = db.execute(text("SELECT id, email, full_name, role FROM users WHERE id = :id"), {"id": user_id})
     existing = result.fetchone()
     if not existing:
@@ -165,7 +165,7 @@ def update_user(user_id: str, user: UserUpdate, db: Session = Depends(get_db), a
         db.execute(
             text("""
                 UPDATE users SET email = :email, password_hash = :password_hash,
-                full_name = :full_name, role = :role::user_role, updated_at = NOW()
+                full_name = :full_name, role = CAST(:role AS user_role), updated_at = NOW()
                 WHERE id = :id
             """),
             {
@@ -180,7 +180,7 @@ def update_user(user_id: str, user: UserUpdate, db: Session = Depends(get_db), a
         db.execute(
             text("""
                 UPDATE users SET email = :email, full_name = :full_name,
-                role = :role::user_role, updated_at = NOW()
+                role = CAST(:role AS user_role), updated_at = NOW()
                 WHERE id = :id
             """),
             {
