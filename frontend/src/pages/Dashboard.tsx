@@ -140,6 +140,9 @@ export default function Dashboard() {
           total_nights: 0,
         };
 
+        let shortTermCount = 0;
+        let totalOccupancy = 0;
+
         for (const prop of properties) {
           try {
             const kpiRes = await api.getKPIs(prop.id, startDate, endDate);
@@ -150,14 +153,21 @@ export default function Dashboard() {
             allKpis.noi += Number(data.noi) || 0;
             allKpis.total_bookings += Number(data.total_bookings) || 0;
             allKpis.total_nights += Number(data.total_nights) || 0;
+
+            // Only count occupancy for properties with bookings (short-term)
+            const propOccupancy = Number(data.occupancy_rate) || 0;
+            if (propOccupancy > 0 || Number(data.total_bookings) > 0) {
+              totalOccupancy += propOccupancy;
+              shortTermCount++;
+            }
           } catch (e) {
             console.error('Failed to load KPIs for property:', prop.id);
           }
         }
 
-        // Calculate averages for rate metrics
-        if (properties.length > 0) {
-          allKpis.occupancy_rate = allKpis.total_nights / (properties.length * 365) * 100;
+        // Calculate averages for rate metrics (only for short-term properties)
+        if (shortTermCount > 0) {
+          allKpis.occupancy_rate = totalOccupancy / shortTermCount;
           allKpis.adr = allKpis.total_nights > 0 ? allKpis.total_revenue / allKpis.total_nights : 0;
           allKpis.revpar = allKpis.adr * (allKpis.occupancy_rate / 100);
         }
