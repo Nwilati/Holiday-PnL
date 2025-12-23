@@ -72,6 +72,7 @@ interface RevenueTrendItem {
 }
 
 interface ExpenseCategory {
+  [key: string]: string | number;
   name: string;
   value: number;
   percentage: number;
@@ -661,7 +662,7 @@ export default function Dashboard() {
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: number) => `AED ${formatAmount(value)}`} />
+                    <Tooltip formatter={(value) => `AED ${formatAmount(Number(value))}`} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="space-y-2 mt-2">
