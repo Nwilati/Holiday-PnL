@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, ChevronRight, Building2, Plus } from 'lucide-react';
+import {
+  TrendingUp, TrendingDown, ChevronRight, Building2, Plus,
+  AlertCircle, Calendar, Clock, FileText, CreditCard, Receipt, Wallet
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend
+} from 'recharts';
 import { api } from '../api/client';
 
 interface Property {
@@ -40,7 +47,38 @@ interface AnnualRevenue {
   active_tenancies: number;
 }
 
-// Utility: Format currency without "AED" prefix for density
+interface Alert {
+  type: 'danger' | 'warning' | 'info';
+  icon: string;
+  title: string;
+  subtitle: string;
+  link: string;
+}
+
+interface YoyChanges {
+  revenue: number;
+  net_revenue: number;
+  expenses: number;
+  bookings: number;
+  nights: number;
+  noi: number;
+}
+
+interface RevenueTrendItem {
+  month: string;
+  revenue: number;
+  expenses: number;
+  noi: number;
+}
+
+interface ExpenseCategory {
+  name: string;
+  value: number;
+  percentage: number;
+  color: string;
+}
+
+// Utility: Format currency
 const formatAmount = (value: number) => {
   return new Intl.NumberFormat('en-AE', {
     minimumFractionDigits: 0,
@@ -56,7 +94,18 @@ const formatDate = (dateStr: string) => {
   });
 };
 
-// Metric component - SAP style
+// Alert icon component
+const AlertIcon = ({ icon, className }: { icon: string; className?: string }) => {
+  const icons: Record<string, React.ReactNode> = {
+    'alert-circle': <AlertCircle className={className} />,
+    'calendar': <Calendar className={className} />,
+    'clock': <Clock className={className} />,
+    'file-text': <FileText className={className} />,
+  };
+  return <>{icons[icon] || <AlertCircle className={className} />}</>;
+};
+
+// Metric component with YoY trend - SAP Fiori style
 const Metric = ({ label, value, prefix = 'AED', trend, small = false }: {
   label: string;
   value: number;
@@ -71,8 +120,8 @@ const Metric = ({ label, value, prefix = 'AED', trend, small = false }: {
         {prefix} {formatAmount(value)}
       </span>
       {trend !== undefined && trend !== 0 && (
-        <span className={`text-xs flex items-center gap-0.5 ${
-          trend > 0 ? 'text-green-600' : 'text-red-600'
+        <span className={`text-xs flex items-center gap-0.5 px-1.5 py-0.5 rounded ${
+          trend > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
         }`}>
           {trend > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
           {Math.abs(trend)}%
@@ -82,6 +131,23 @@ const Metric = ({ label, value, prefix = 'AED', trend, small = false }: {
   </div>
 );
 
+// Custom tooltip for charts
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white border border-stone-200 rounded shadow-lg p-3">
+        <p className="text-sm font-medium text-stone-900 mb-2">{label}</p>
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-xs text-stone-600">
+            <span style={{ color: entry.color }}>●</span> {entry.name}: AED {formatAmount(entry.value)}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function Dashboard() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<string>('');
@@ -90,6 +156,10 @@ export default function Dashboard() {
   const [upcomingCheques, setUpcomingCheques] = useState<UpcomingCheque[]>([]);
   const [allCheques, setAllCheques] = useState<any[]>([]);
   const [annualRevenue, setAnnualRevenue] = useState<AnnualRevenue | null>(null);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [yoyChanges, setYoyChanges] = useState<YoyChanges | null>(null);
+  const [revenueTrend, setRevenueTrend] = useState<RevenueTrendItem[]>([]);
+  const [expenseBreakdown, setExpenseBreakdown] = useState<ExpenseCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const currentYear = new Date().getFullYear();
@@ -99,10 +169,16 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    loadDashboardData();
-    loadUpcomingCheques();
-    loadAnnualRevenue();
-    loadAllCheques();
+    if (properties.length > 0) {
+      loadDashboardData();
+      loadUpcomingCheques();
+      loadAnnualRevenue();
+      loadAllCheques();
+      loadAlerts();
+      loadYoyComparison();
+      loadRevenueTrend();
+      loadExpenseBreakdown();
+    }
   }, [selectedProperty, selectedYear, properties]);
 
   const loadProperties = async () => {
@@ -154,7 +230,6 @@ export default function Dashboard() {
             allKpis.total_bookings += Number(data.total_bookings) || 0;
             allKpis.total_nights += Number(data.total_nights) || 0;
 
-            // Only count occupancy for properties with bookings (short-term)
             const propOccupancy = Number(data.occupancy_rate) || 0;
             if (propOccupancy > 0 || Number(data.total_bookings) > 0) {
               totalOccupancy += propOccupancy;
@@ -165,7 +240,6 @@ export default function Dashboard() {
           }
         }
 
-        // Calculate averages for rate metrics (only for short-term properties)
         if (shortTermCount > 0) {
           allKpis.occupancy_rate = totalOccupancy / shortTermCount;
           allKpis.adr = allKpis.total_nights > 0 ? allKpis.total_revenue / allKpis.total_nights : 0;
@@ -216,92 +290,138 @@ export default function Dashboard() {
 
   const loadAllCheques = async () => {
     try {
-      const params: { property_id?: string } = {};
-      if (selectedProperty) {
-        params.property_id = selectedProperty;
-      }
-      const response = await api.getTenancies(params);
-      const tenancies = response.data || [];
+      const tenanciesRes = await api.getTenancies({ status: 'active' });
+      const tenancies = tenanciesRes.data;
       const cheques: any[] = [];
-      tenancies.forEach((tenancy: any) => {
-        if (tenancy.cheques) {
-          cheques.push(...tenancy.cheques);
+      for (const t of tenancies) {
+        if (t.cheques) {
+          for (const c of t.cheques) {
+            cheques.push({
+              ...c,
+              property_name: t.property_name,
+              tenant_name: t.tenant_name,
+            });
+          }
         }
-      });
+      }
       setAllCheques(cheques);
     } catch (error) {
-      console.error('Failed to load cheques:', error);
-      setAllCheques([]);
+      console.error('Failed to load all cheques:', error);
     }
   };
 
-  // Combined revenue (short-term + annual cleared)
+  const loadAlerts = async () => {
+    try {
+      const response = await api.getAlerts(selectedProperty || undefined);
+      setAlerts(response.data.alerts || []);
+    } catch (error) {
+      console.error('Failed to load alerts:', error);
+      setAlerts([]);
+    }
+  };
+
+  const loadYoyComparison = async () => {
+    try {
+      const response = await api.getYoyComparison(selectedProperty || undefined, selectedYear);
+      setYoyChanges(response.data.changes || null);
+    } catch (error) {
+      console.error('Failed to load YoY comparison:', error);
+      setYoyChanges(null);
+    }
+  };
+
+  const loadRevenueTrend = async () => {
+    try {
+      let response;
+      if (selectedProperty) {
+        response = await api.getRevenueTrend(selectedProperty, selectedYear);
+      } else {
+        response = await api.getRevenueTrendAll(selectedYear);
+      }
+      setRevenueTrend(response.data || []);
+    } catch (error) {
+      console.error('Failed to load revenue trend:', error);
+      setRevenueTrend([]);
+    }
+  };
+
+  const loadExpenseBreakdown = async () => {
+    try {
+      const startDate = `${selectedYear}-01-01`;
+      const endDate = `${selectedYear}-12-31`;
+      let response;
+      if (selectedProperty) {
+        response = await api.getExpenseBreakdown(selectedProperty, startDate, endDate);
+        // Transform to match expected format
+        setExpenseBreakdown(response.data.map((item: any, index: number) => ({
+          name: item.category_name,
+          value: item.amount,
+          percentage: item.percentage,
+          color: ['#0854a0', '#d08014', '#107e3e', '#a9d18e', '#bb0000', '#6c6c6c'][index % 6]
+        })));
+      } else {
+        response = await api.getExpenseBreakdownAll(startDate, endDate);
+        setExpenseBreakdown(response.data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load expense breakdown:', error);
+      setExpenseBreakdown([]);
+    }
+  };
+
+  // Helper functions
   const getCombinedRevenue = () => {
     const shortTerm = Number(kpis?.total_revenue) || 0;
-    const annual = Number(annualRevenue?.total_cleared) || 0;
-    return shortTerm + annual;
+    const longTerm = Number(annualRevenue?.total_cleared) || 0;
+    return shortTerm + longTerm;
   };
 
-  // Combined NOI
   const getCombinedNOI = () => {
-    const shortTermNOI = Number(kpis?.noi) || 0;
-    const annualCleared = Number(annualRevenue?.total_cleared) || 0;
-    return shortTermNOI + annualCleared;
+    const revenue = getCombinedRevenue();
+    const expenses = Number(kpis?.total_expenses) || 0;
+    return revenue - expenses;
   };
 
-  // Get collection percentage
   const getCollectionPercent = () => {
     const cleared = Number(annualRevenue?.total_cleared) || 0;
-    const pending = Number(annualRevenue?.total_pending) || 0;
-    const total = cleared + pending;
-    return total > 0 ? Math.round((cleared / total) * 100) : 0;
+    const total = Number(annualRevenue?.total_contract_value) || 0;
+    return total > 0 ? Math.round(cleared / total * 100) : 0;
   };
 
-  // Get cheques due timeline data
   const getChequesTimelineData = () => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const timeline = {
-      overdue: { count: 0, amount: 0 },
-      thisWeek: { count: 0, amount: 0 },
-      thisMonth: { count: 0, amount: 0 },
-      next30Days: { count: 0, amount: 0 },
-    };
-
-    allCheques
-      .filter((cheque) => cheque.status === 'pending')
-      .forEach((cheque) => {
-        const dueDate = new Date(cheque.due_date);
-        dueDate.setHours(0, 0, 0, 0);
-        const diffDays = Math.floor((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-        if (diffDays < 0) {
-          timeline.overdue.count++;
-          timeline.overdue.amount += cheque.amount || 0;
-        } else if (diffDays <= 7) {
-          timeline.thisWeek.count++;
-          timeline.thisWeek.amount += cheque.amount || 0;
-        } else if (diffDays <= 30) {
-          timeline.thisMonth.count++;
-          timeline.thisMonth.amount += cheque.amount || 0;
-        } else if (diffDays <= 60) {
-          timeline.next30Days.count++;
-          timeline.next30Days.amount += cheque.amount || 0;
-        }
-      });
-
-    return [
-      { label: 'Overdue', ...timeline.overdue, status: 'negative' as const },
-      { label: 'This Week', ...timeline.thisWeek, status: 'warning' as const },
-      { label: 'This Month', ...timeline.thisMonth, status: 'info' as const },
-      { label: 'Next 30 Days', ...timeline.next30Days, status: 'neutral' as const },
+    const data = [
+      { label: 'Overdue', status: 'negative', count: 0, amount: 0 },
+      { label: 'This Week', status: 'warning', count: 0, amount: 0 },
+      { label: 'Next 30 Days', status: 'info', count: 0, amount: 0 },
+      { label: 'Future', status: 'neutral', count: 0, amount: 0 },
     ];
+
+    allCheques.filter(c => c.status === 'pending').forEach(cheque => {
+      const dueDate = new Date(cheque.due_date);
+      const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 0) {
+        data[0].count++;
+        data[0].amount += Number(cheque.amount);
+      } else if (diffDays <= 7) {
+        data[1].count++;
+        data[1].amount += Number(cheque.amount);
+      } else if (diffDays <= 30) {
+        data[2].count++;
+        data[2].amount += Number(cheque.amount);
+      } else {
+        data[3].count++;
+        data[3].amount += Number(cheque.amount);
+      }
+    });
+
+    return data;
   };
 
   if (isLoading && properties.length === 0) {
     return (
-      <div className="flex items-center justify-center h-96">
+      <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-2 border-stone-200 border-t-sky-600 rounded-full animate-spin"></div>
       </div>
     );
@@ -362,22 +482,205 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Primary Metrics Panel */}
+      {/* Quick Actions Bar */}
+      <div className="flex items-center gap-3">
+        <Link
+          to="/bookings?action=new"
+          className="flex items-center gap-2 px-3 py-2 bg-white border border-stone-200 rounded text-sm text-stone-700 hover:bg-stone-50 hover:border-stone-300 transition-colors"
+        >
+          <CreditCard className="w-4 h-4 text-sky-600" />
+          Add Booking
+        </Link>
+        <Link
+          to="/expenses?action=new"
+          className="flex items-center gap-2 px-3 py-2 bg-white border border-stone-200 rounded text-sm text-stone-700 hover:bg-stone-50 hover:border-stone-300 transition-colors"
+        >
+          <Receipt className="w-4 h-4 text-amber-600" />
+          Add Expense
+        </Link>
+        <Link
+          to="/tenancies"
+          className="flex items-center gap-2 px-3 py-2 bg-white border border-stone-200 rounded text-sm text-stone-700 hover:bg-stone-50 hover:border-stone-300 transition-colors"
+        >
+          <Wallet className="w-4 h-4 text-green-600" />
+          Record Payment
+        </Link>
+      </div>
+
+      {/* Alerts Section */}
+      {alerts.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-lg">
+          <div className="px-4 py-3 border-b border-stone-100">
+            <h2 className="text-sm font-medium text-stone-700">Alerts</h2>
+          </div>
+          <div className="divide-y divide-stone-100">
+            {alerts.map((alert, index) => (
+              <Link
+                key={index}
+                to={alert.link}
+                className="flex items-center gap-4 px-4 py-3 hover:bg-stone-50 transition-colors"
+              >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  alert.type === 'danger' ? 'bg-red-100' :
+                  alert.type === 'warning' ? 'bg-amber-100' : 'bg-sky-100'
+                }`}>
+                  <AlertIcon
+                    icon={alert.icon}
+                    className={`w-4 h-4 ${
+                      alert.type === 'danger' ? 'text-red-600' :
+                      alert.type === 'warning' ? 'text-amber-600' : 'text-sky-600'
+                    }`}
+                  />
+                </div>
+                <div className="flex-1">
+                  <p className={`text-sm font-medium ${
+                    alert.type === 'danger' ? 'text-red-800' :
+                    alert.type === 'warning' ? 'text-amber-800' : 'text-sky-800'
+                  }`}>{alert.title}</p>
+                  <p className="text-xs text-stone-500">{alert.subtitle}</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-stone-400" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Primary Metrics Panel with YoY */}
       <div className="bg-white border border-stone-200 rounded-lg">
-        <div className="px-4 py-3 border-b border-stone-100">
+        <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
           <h2 className="text-sm font-medium text-stone-700">Key Performance Indicators</h2>
+          {yoyChanges && (
+            <span className="text-xs text-stone-500">vs {selectedYear - 1}</span>
+          )}
         </div>
         <div className="px-4 py-2 grid grid-cols-6 divide-x divide-stone-100">
-          <Metric label="Short-Term Revenue" value={Number(kpis?.total_revenue) || 0} />
-          <Metric label="Annual Tenancy" value={Number(annualRevenue?.total_cleared) || 0} />
-          <Metric label="Combined Revenue" value={getCombinedRevenue()} />
-          <Metric label="Total Expenses" value={Number(kpis?.total_expenses) || 0} />
-          <Metric label="Net Operating Income" value={getCombinedNOI()} />
+          <Metric
+            label="Short-Term Revenue"
+            value={Number(kpis?.total_revenue) || 0}
+            trend={yoyChanges?.revenue}
+          />
+          <Metric
+            label="Annual Tenancy"
+            value={Number(annualRevenue?.total_cleared) || 0}
+          />
+          <Metric
+            label="Combined Revenue"
+            value={getCombinedRevenue()}
+          />
+          <Metric
+            label="Total Expenses"
+            value={Number(kpis?.total_expenses) || 0}
+            trend={yoyChanges?.expenses ? -yoyChanges.expenses : undefined}
+          />
+          <Metric
+            label="Net Operating Income"
+            value={getCombinedNOI()}
+            trend={yoyChanges?.noi}
+          />
           <div className="py-3 pl-4">
             <dt className="text-xs text-stone-500 uppercase tracking-wide">Occupancy</dt>
             <dd className="mt-1 text-xl font-semibold text-stone-900">
               {Math.round(Number(kpis?.occupancy_rate) || 0)}%
             </dd>
+          </div>
+        </div>
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-3 gap-6">
+        {/* Revenue Trend Chart */}
+        <div className="col-span-2 bg-white border border-stone-200 rounded-lg">
+          <div className="px-4 py-3 border-b border-stone-100">
+            <h2 className="text-sm font-medium text-stone-700">Monthly Revenue Trend</h2>
+          </div>
+          <div className="p-4">
+            {revenueTrend.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={revenueTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#78716c" />
+                  <YAxis tick={{ fontSize: 12 }} stroke="#78716c" tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Line
+                    type="monotone"
+                    dataKey="revenue"
+                    name="Revenue"
+                    stroke="#0854a0"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="expenses"
+                    name="Expenses"
+                    stroke="#d08014"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="noi"
+                    name="NOI"
+                    stroke="#107e3e"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-64 flex items-center justify-center text-stone-400 text-sm">
+                No data available for {selectedYear}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Expense Breakdown Donut */}
+        <div className="bg-white border border-stone-200 rounded-lg">
+          <div className="px-4 py-3 border-b border-stone-100">
+            <h2 className="text-sm font-medium text-stone-700">Expense Breakdown</h2>
+          </div>
+          <div className="p-4">
+            {expenseBreakdown.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={expenseBreakdown}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={70}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {expenseBreakdown.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => `AED ${formatAmount(value)}`} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-2 mt-2">
+                  {expenseBreakdown.slice(0, 4).map((item, index) => (
+                    <div key={index} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                        <span className="text-stone-600 truncate max-w-[120px]">{item.name}</span>
+                      </div>
+                      <span className="text-stone-900 font-medium">{item.percentage}%</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="h-48 flex items-center justify-center text-stone-400 text-sm">
+                No expenses recorded
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -488,7 +791,7 @@ export default function Dashboard() {
               <tr key={cheque.id} className="hover:bg-stone-50">
                 <td className="px-4 py-2.5 text-sm font-medium text-stone-900">{cheque.tenant_name}</td>
                 <td className="px-4 py-2.5 text-sm text-stone-600">{cheque.property_name}</td>
-                <td className="px-4 py-2.5 text-sm text-stone-600">{cheque.cheque_number}</td>
+                <td className="px-4 py-2.5 text-sm text-stone-600">{cheque.cheque_number || '—'}</td>
                 <td className="px-4 py-2.5 text-sm font-medium text-stone-900 text-right tabular-nums">
                   AED {formatAmount(cheque.amount)}
                 </td>

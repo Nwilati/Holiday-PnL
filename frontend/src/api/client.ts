@@ -191,6 +191,24 @@ const api = {
   getExpenseBreakdown: (propertyId: string, startDate: string, endDate: string) =>
     axiosInstance.get('/dashboard/expense-breakdown', { params: { property_id: propertyId, start_date: startDate, end_date: endDate } }),
 
+  // Dashboard - Enhanced
+  getAlerts: (propertyId?: string) =>
+    axiosInstance.get('/dashboard/alerts', { params: propertyId ? { property_id: propertyId } : {} }),
+
+  getYoyComparison: (propertyId?: string, year?: number) =>
+    axiosInstance.get('/dashboard/yoy-comparison', {
+      params: {
+        ...(propertyId && { property_id: propertyId }),
+        ...(year && { year })
+      }
+    }),
+
+  getRevenueTrendAll: (year: number) =>
+    axiosInstance.get('/dashboard/revenue-trend-all', { params: { year } }),
+
+  getExpenseBreakdownAll: (startDate: string, endDate: string) =>
+    axiosInstance.get('/dashboard/expense-breakdown-all', { params: { start_date: startDate, end_date: endDate } }),
+
   // Receipts
   getReceipts: (expenseId: string) => axiosInstance.get(`/receipts/${expenseId}`),
   uploadReceipt: (expenseId: string, file: File) => {
