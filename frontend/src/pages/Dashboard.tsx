@@ -596,22 +596,28 @@ export default function Dashboard() {
               </div>
             </dd>
           </div>
-          <Metric
-            label="Combined Revenue"
-            value={getCombinedRevenue()}
-          />
-          <Metric
-            label="Total Expenses"
-            value={Number(kpis?.total_expenses) || 0}
-            trend={yoyChanges?.expenses ? -yoyChanges.expenses : undefined}
-          />
+          <div className="pl-4">
+            <Metric
+              label="Combined Revenue"
+              value={getCombinedRevenue()}
+            />
+          </div>
+          <div className="pl-4">
+            <Metric
+              label="Total Expenses"
+              value={Number(kpis?.total_expenses) || 0}
+              trend={yoyChanges?.expenses ? -yoyChanges.expenses : undefined}
+            />
+          </div>
         </div>
         <div className="px-4 py-2 grid grid-cols-4 divide-x divide-stone-100 border-t border-stone-100">
-          <Metric
-            label="Net Operating Income"
-            value={getCombinedNOI()}
-            trend={yoyChanges?.noi}
-          />
+          <div className="py-3">
+            <Metric
+              label="Net Operating Income"
+              value={getCombinedNOI()}
+              trend={yoyChanges?.noi}
+            />
+          </div>
           <div className="pl-4 py-3">
             <dt className="text-xs text-stone-500 uppercase tracking-wide">Occupancy</dt>
             <dd className="mt-1 text-xl font-semibold text-stone-900">
