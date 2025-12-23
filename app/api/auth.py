@@ -97,7 +97,7 @@ def register(user: UserCreate, db: Session = Depends(get_db), admin: dict = Depe
     db.execute(
         text("""
             INSERT INTO users (id, email, password_hash, full_name, role)
-            VALUES (:id, :email, :password_hash, :full_name, :role::user_role)
+            VALUES (:id, :email, :password_hash, :full_name, CAST(:role AS user_role))
         """),
         {
             "id": user_id,
