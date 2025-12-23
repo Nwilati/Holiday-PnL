@@ -209,6 +209,9 @@ const api = {
   getExpenseBreakdownAll: (startDate: string, endDate: string) =>
     axiosInstance.get('/dashboard/expense-breakdown-all', { params: { start_date: startDate, end_date: endDate } }),
 
+  getPropertyROI: (year?: number) =>
+    axiosInstance.get('/dashboard/property-roi', { params: year ? { year } : {} }),
+
   // Receipts
   getReceipts: (expenseId: string) => axiosInstance.get(`/receipts/${expenseId}`),
   uploadReceipt: (expenseId: string, file: File) => {

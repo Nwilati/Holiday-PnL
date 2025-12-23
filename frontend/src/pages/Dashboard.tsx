@@ -79,6 +79,16 @@ interface ExpenseCategory {
   color: string;
 }
 
+interface PropertyROI {
+  property_id: string;
+  property_name: string;
+  purchase_price: number;
+  total_revenue: number;
+  total_expenses: number;
+  noi: number;
+  roi: number;
+}
+
 // Utility: Format currency
 const formatAmount = (value: number) => {
   return new Intl.NumberFormat('en-AE', {
@@ -161,6 +171,7 @@ export default function Dashboard() {
   const [yoyChanges, setYoyChanges] = useState<YoyChanges | null>(null);
   const [revenueTrend, setRevenueTrend] = useState<RevenueTrendItem[]>([]);
   const [expenseBreakdown, setExpenseBreakdown] = useState<ExpenseCategory[]>([]);
+  const [propertyROI, setPropertyROI] = useState<PropertyROI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const currentYear = new Date().getFullYear();
@@ -179,6 +190,7 @@ export default function Dashboard() {
       loadYoyComparison();
       loadRevenueTrend();
       loadExpenseBreakdown();
+      loadPropertyROI();
     }
   }, [selectedProperty, selectedYear, properties]);
 
@@ -370,10 +382,20 @@ export default function Dashboard() {
     }
   };
 
+  const loadPropertyROI = async () => {
+    try {
+      const response = await api.getPropertyROI(selectedYear);
+      setPropertyROI(response.data.properties || []);
+    } catch (error) {
+      console.error('Failed to load property ROI:', error);
+      setPropertyROI([]);
+    }
+  };
+
   // Helper functions
   const getCombinedRevenue = () => {
     const shortTerm = Number(kpis?.total_revenue) || 0;
-    const longTerm = Number(annualRevenue?.total_cleared) || 0;
+    const longTerm = Number(annualRevenue?.total_contract_value) || 0;  // Use expected, not cleared
     return shortTerm + longTerm;
   };
 
@@ -555,14 +577,18 @@ export default function Dashboard() {
             <span className="text-xs text-stone-500">vs {selectedYear - 1}</span>
           )}
         </div>
-        <div className="px-4 py-2 grid grid-cols-6 divide-x divide-stone-100">
+        <div className="px-4 py-2 grid grid-cols-7 divide-x divide-stone-100">
           <Metric
             label="Short-Term Revenue"
             value={Number(kpis?.total_revenue) || 0}
             trend={yoyChanges?.revenue}
           />
           <Metric
-            label="Annual Tenancy"
+            label="Annual Rent (Expected)"
+            value={Number(annualRevenue?.total_contract_value) || 0}
+          />
+          <Metric
+            label="Annual Rent (Collected)"
             value={Number(annualRevenue?.total_cleared) || 0}
           />
           <Metric
@@ -768,6 +794,63 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Property ROI Widget */}
+      {propertyROI.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-lg">
+          <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
+            <h2 className="text-sm font-medium text-stone-700">Property Performance by ROI</h2>
+            <span className="text-xs text-stone-500">{selectedYear} Annual Return</span>
+          </div>
+          <table className="w-full">
+            <thead>
+              <tr className="bg-stone-50 text-left">
+                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Property</th>
+                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Purchase Price</th>
+                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Revenue</th>
+                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Expenses</th>
+                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">NOI</th>
+                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">ROI</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {propertyROI.map((prop, index) => (
+                <tr key={prop.property_id} className="hover:bg-stone-50">
+                  <td className="px-4 py-2.5 text-sm font-medium text-stone-900">
+                    <div className="flex items-center gap-2">
+                      {index === 0 && <span className="text-amber-500">1st</span>}
+                      {index === 1 && <span className="text-stone-400">2nd</span>}
+                      {index === 2 && <span className="text-amber-700">3rd</span>}
+                      {prop.property_name}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-sm text-stone-600 text-right tabular-nums">
+                    AED {formatAmount(prop.purchase_price)}
+                  </td>
+                  <td className="px-4 py-2.5 text-sm text-stone-600 text-right tabular-nums">
+                    AED {formatAmount(prop.total_revenue)}
+                  </td>
+                  <td className="px-4 py-2.5 text-sm text-stone-600 text-right tabular-nums">
+                    AED {formatAmount(prop.total_expenses)}
+                  </td>
+                  <td className="px-4 py-2.5 text-sm font-medium text-stone-900 text-right tabular-nums">
+                    AED {formatAmount(prop.noi)}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-sm font-semibold ${
+                      prop.roi >= 8 ? 'bg-green-100 text-green-800' :
+                      prop.roi >= 5 ? 'bg-amber-100 text-amber-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {prop.roi}%
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Upcoming Cheques Table */}
       <div className="bg-white border border-stone-200 rounded-lg">

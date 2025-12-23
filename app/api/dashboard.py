@@ -476,3 +476,76 @@ def get_expense_breakdown_all(
         }
         for i, r in enumerate(results)
     ]
+
+
+@router.get("/property-roi")
+def get_property_roi(
+    year: int = None,
+    db: Session = Depends(get_db)
+):
+    """Get ROI for all properties with purchase price"""
+    if year is None:
+        year = date.today().year
+
+    start = date(year, 1, 1)
+    end = date(year, 12, 31)
+
+    # Get properties with purchase price
+    properties = db.query(Property).filter(
+        Property.purchase_price.isnot(None),
+        Property.purchase_price > 0,
+        Property.is_active == True
+    ).all()
+
+    results = []
+    for prop in properties:
+        # Get revenue
+        revenue = db.query(
+            func.sum(Booking.net_revenue).label('net_revenue')
+        ).filter(
+            Booking.property_id == prop.id,
+            Booking.check_in >= start,
+            Booking.check_in <= end,
+            cast(Booking.status, String).notin_(['cancelled', 'no_show'])
+        ).scalar() or 0
+
+        # Get tenancy revenue
+        tenancy_revenue = db.query(
+            func.sum(TenancyCheque.amount).label('amount')
+        ).join(Tenancy).filter(
+            Tenancy.property_id == prop.id,
+            TenancyCheque.status == 'cleared',
+            TenancyCheque.due_date >= start,
+            TenancyCheque.due_date <= end
+        ).scalar() or 0
+
+        # Get expenses
+        expenses = db.query(
+            func.sum(Expense.total_amount).label('expenses')
+        ).filter(
+            Expense.property_id == prop.id,
+            Expense.expense_date >= start,
+            Expense.expense_date <= end
+        ).scalar() or 0
+
+        total_revenue = float(revenue) + float(tenancy_revenue)
+        total_expenses = float(expenses)
+        noi = total_revenue - total_expenses
+        purchase_price = float(prop.purchase_price)
+        roi = (noi / purchase_price * 100) if purchase_price > 0 else 0
+
+        results.append({
+            'property_id': str(prop.id),
+            'property_name': prop.name,
+            'purchase_price': purchase_price,
+            'purchase_date': str(prop.purchase_date) if prop.purchase_date else None,
+            'total_revenue': total_revenue,
+            'total_expenses': total_expenses,
+            'noi': noi,
+            'roi': round(roi, 2)
+        })
+
+    # Sort by ROI descending
+    results.sort(key=lambda x: x['roi'], reverse=True)
+
+    return {'properties': results, 'year': year}

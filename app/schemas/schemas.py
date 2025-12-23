@@ -68,6 +68,8 @@ class PropertyBase(BaseModel):
     vat_registered: bool = True
     vat_rate: Decimal = Decimal("5.00")
     timezone: str = "Asia/Dubai"
+    purchase_price: Optional[Decimal] = None
+    purchase_date: Optional[date] = None
 
 class PropertyCreate(PropertyBase):
     pass
@@ -89,12 +91,16 @@ class PropertyUpdate(BaseModel):
     dtcm_expiry: Optional[date] = None
     ejari_number: Optional[str] = None
     is_active: Optional[bool] = None
+    purchase_price: Optional[Decimal] = None
+    purchase_date: Optional[date] = None
 
 class PropertyResponse(PropertyBase):
     id: UUID
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    purchase_price: Optional[Decimal] = None
+    purchase_date: Optional[date] = None
 
     class Config:
         from_attributes = True

@@ -8,7 +8,11 @@ export type Property = {
   bedrooms: number;
   bathrooms: number;
   max_guests: number;
+  unit_type: string;
+  rental_mode: string;
   is_active: boolean;
+  purchase_price?: number;
+  purchase_date?: string;
 };
 
 export type Channel = {

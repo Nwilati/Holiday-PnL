@@ -15,6 +15,8 @@ type Property = {
   unit_type: string;
   rental_mode: string;
   is_active: boolean;
+  purchase_price?: number;
+  purchase_date?: string;
 };
 
 export default function Properties() {
@@ -182,6 +184,8 @@ function PropertyForm({ property, onClose, onSave }: PropertyFormProps) {
     max_guests: property?.max_guests || 2,
     unit_type: property?.unit_type || 'standard',
     rental_mode: property?.rental_mode || 'short_term',
+    purchase_price: property?.purchase_price || '',
+    purchase_date: property?.purchase_date || '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -327,6 +331,33 @@ function PropertyForm({ property, onClose, onSave }: PropertyFormProps) {
                 <option value="standard">Standard (AED 10/night)</option>
                 <option value="deluxe">Deluxe (AED 15/night)</option>
               </select>
+            </div>
+          </div>
+
+          {/* Purchase Information for ROI */}
+          <div className="border-t border-stone-200 pt-4 mt-4">
+            <p className="text-xs font-medium text-stone-500 mb-3 uppercase tracking-wide">Investment Details (for ROI calculation)</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-stone-600 mb-1">Purchase Price (AED)</label>
+                <input
+                  type="number"
+                  value={formData.purchase_price}
+                  onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value ? parseFloat(e.target.value) : '' })}
+                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded focus:outline-none focus:border-sky-500 tabular-nums"
+                  placeholder="e.g., 1500000"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-600 mb-1">Purchase Date</label>
+                <input
+                  type="date"
+                  value={formData.purchase_date}
+                  onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded focus:outline-none focus:border-sky-500"
+                />
+              </div>
             </div>
           </div>
         </form>

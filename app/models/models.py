@@ -46,6 +46,8 @@ class Property(Base):
     timezone = Column(String(50), default='Asia/Dubai')
     fiscal_year_start = Column(Integer, default=1)
     is_active = Column(Boolean, default=True)
+    purchase_price = Column(Numeric(14, 2), nullable=True)
+    purchase_date = Column(Date, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'))
