@@ -165,3 +165,91 @@ def delete_expense(expense_id: UUID, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Expense deleted"}
+
+
+@router.get("/report/detailed")
+def get_detailed_expense_report(
+    property_id: UUID,
+    start_date: date,
+    end_date: date,
+    is_paid: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
+    """Get detailed expense report with paid/unpaid breakdown"""
+
+    # Base query for expenses
+    query = db.query(Expense).filter(
+        Expense.property_id == property_id,
+        Expense.expense_date >= start_date,
+        Expense.expense_date <= end_date
+    )
+
+    if is_paid is not None:
+        query = query.filter(Expense.is_paid == is_paid)
+
+    expenses = query.order_by(Expense.expense_date.desc()).all()
+
+    # Get category names
+    categories = {c.id: c.name for c in db.query(ExpenseCategory).all()}
+
+    # Calculate totals
+    total_amount = sum(float(e.total_amount or 0) for e in expenses)
+    total_paid = sum(float(e.total_amount or 0) for e in expenses if e.is_paid)
+    total_unpaid = sum(float(e.total_amount or 0) for e in expenses if not e.is_paid)
+
+    # Category breakdown
+    category_totals = {}
+    for e in expenses:
+        cat_name = categories.get(e.category_id, 'Unknown')
+        if cat_name not in category_totals:
+            category_totals[cat_name] = {'total': 0, 'paid': 0, 'unpaid': 0, 'count': 0}
+        category_totals[cat_name]['total'] += float(e.total_amount or 0)
+        category_totals[cat_name]['count'] += 1
+        if e.is_paid:
+            category_totals[cat_name]['paid'] += float(e.total_amount or 0)
+        else:
+            category_totals[cat_name]['unpaid'] += float(e.total_amount or 0)
+
+    # Format category breakdown
+    category_breakdown = [
+        {
+            'category': cat,
+            'total': data['total'],
+            'paid': data['paid'],
+            'unpaid': data['unpaid'],
+            'count': data['count'],
+            'percentage': round(data['total'] / total_amount * 100, 1) if total_amount > 0 else 0
+        }
+        for cat, data in sorted(category_totals.items(), key=lambda x: x[1]['total'], reverse=True)
+    ]
+
+    # Format individual expenses
+    expense_details = [
+        {
+            'id': str(e.id),
+            'date': str(e.expense_date),
+            'vendor': e.vendor or '',
+            'category': categories.get(e.category_id, 'Unknown'),
+            'description': e.description or '',
+            'amount': float(e.amount or 0),
+            'vat': float(e.vat_amount or 0),
+            'total': float(e.total_amount or 0),
+            'is_paid': e.is_paid,
+            'payment_method': e.payment_method,
+            'receipt_url': e.receipt_url
+        }
+        for e in expenses
+    ]
+
+    return {
+        'summary': {
+            'total_expenses': total_amount,
+            'total_paid': total_paid,
+            'total_unpaid': total_unpaid,
+            'expense_count': len(expenses),
+            'paid_count': sum(1 for e in expenses if e.is_paid),
+            'unpaid_count': sum(1 for e in expenses if not e.is_paid)
+        },
+        'category_breakdown': category_breakdown,
+        'expenses': expense_details
+    }

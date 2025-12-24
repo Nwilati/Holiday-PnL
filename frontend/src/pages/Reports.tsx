@@ -54,6 +54,44 @@ interface AnnualRevenue {
   active_tenancies: number;
 }
 
+interface DetailedExpense {
+  id: string;
+  date: string;
+  vendor: string;
+  category: string;
+  description: string;
+  amount: number;
+  vat: number;
+  total: number;
+  is_paid: boolean;
+  payment_method: string;
+  receipt_url: string;
+}
+
+interface ExpenseReportSummary {
+  total_expenses: number;
+  total_paid: number;
+  total_unpaid: number;
+  expense_count: number;
+  paid_count: number;
+  unpaid_count: number;
+}
+
+interface CategoryBreakdownDetailed {
+  category: string;
+  total: number;
+  paid: number;
+  unpaid: number;
+  count: number;
+  percentage: number;
+}
+
+interface DetailedExpenseReport {
+  summary: ExpenseReportSummary;
+  category_breakdown: CategoryBreakdownDetailed[];
+  expenses: DetailedExpense[];
+}
+
 // Helper to safely convert to number
 const toNum = (val: any): number => {
   if (val === null || val === undefined) return 0;
@@ -90,6 +128,8 @@ export default function Reports() {
   const [isLoading, setIsLoading] = useState(true);
   const [propertyName, setPropertyName] = useState('');
   const [reportType, setReportType] = useState<'full' | 'expenses' | 'revenue' | 'tenancy'>('full');
+  const [detailedExpenseReport, setDetailedExpenseReport] = useState<DetailedExpenseReport | null>(null);
+  const [expenseFilter, setExpenseFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
 
   const years = [2023, 2024, 2025, 2026, 2027];
 
@@ -153,12 +193,13 @@ export default function Reports() {
     if (property) setPropertyName(property.name);
 
     try {
-      const [kpiRes, trendRes, expenseRes, channelRes, annualRes] = await Promise.all([
+      const [kpiRes, trendRes, expenseRes, channelRes, annualRes, detailedExpenseRes] = await Promise.all([
         api.getKPIs(selectedProperty, startDate, endDate),
         api.getRevenueTrend(selectedProperty, selectedYear),
         api.getExpenseBreakdown(selectedProperty, startDate, endDate),
         api.getChannelMix(selectedProperty, startDate, endDate),
         api.getAnnualRevenue({ property_id: selectedProperty, start_date: startDate, end_date: endDate }).catch(() => ({ data: null })),
+        api.getDetailedExpenseReport(selectedProperty, startDate, endDate).catch(() => ({ data: null })),
       ]);
 
       setKpis(kpiRes.data);
@@ -174,6 +215,7 @@ export default function Reports() {
       setExpenseBreakdown(expenseRes.data || []);
       setChannelMix(channelRes.data || []);
       setAnnualRevenue(annualRes.data);
+      setDetailedExpenseReport(detailedExpenseRes.data);
     } catch (error) {
       console.error('Failed to load report data:', error);
     } finally {
@@ -230,29 +272,73 @@ export default function Reports() {
     }
 
     if (reportType === 'expenses') {
-      // Expenses Only Report
+      // Detailed Expenses Excel Report
       const summaryData = [
         ['Expense Report - ' + propertyName],
         ['Period: ' + periodLabel],
         ['Generated: ' + format(new Date(), 'MMM d, yyyy')],
         [],
-        ['Total Expenses', formatCurrency(kpis?.total_expenses)],
+        ['SUMMARY'],
+        ['Total Expenses', formatCurrency(detailedExpenseReport?.summary?.total_expenses)],
+        ['Total Paid', formatCurrency(detailedExpenseReport?.summary?.total_paid)],
+        ['Outstanding', formatCurrency(detailedExpenseReport?.summary?.total_unpaid)],
+        ['Expense Count', detailedExpenseReport?.summary?.expense_count || 0],
       ];
       const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
 
-      // Expense Breakdown Sheet
-      const expenseHeaders = ['Category', 'Amount', 'Percentage'];
-      const expenseRows = expenseBreakdown.map(e => [
-        e.category_name,
-        toNum(e.amount),
-        `${toNum(e.percentage).toFixed(1)}%`
+      // Category Breakdown Sheet
+      const categoryHeaders = ['Category', 'Total', 'Paid', 'Unpaid', 'Count', '%'];
+      const categoryRows = (detailedExpenseReport?.category_breakdown || []).map(c => [
+        c.category,
+        c.total,
+        c.paid,
+        c.unpaid,
+        c.count,
+        `${c.percentage}%`
       ]);
-      const expenseSheet = XLSX.utils.aoa_to_sheet([expenseHeaders, ...expenseRows]);
-      XLSX.utils.book_append_sheet(wb, expenseSheet, 'Expenses');
+      const categorySheet = XLSX.utils.aoa_to_sheet([categoryHeaders, ...categoryRows]);
+      XLSX.utils.book_append_sheet(wb, categorySheet, 'By Category');
+
+      // Detailed Expenses Sheet
+      const detailHeaders = ['Date', 'Vendor', 'Category', 'Description', 'Amount', 'VAT', 'Total', 'Paid', 'Payment Method'];
+      const detailRows = (detailedExpenseReport?.expenses || []).map(e => [
+        e.date,
+        e.vendor,
+        e.category,
+        e.description,
+        e.amount,
+        e.vat,
+        e.total,
+        e.is_paid ? 'Yes' : 'No',
+        e.payment_method || '-'
+      ]);
+      const detailSheet = XLSX.utils.aoa_to_sheet([detailHeaders, ...detailRows]);
+      XLSX.utils.book_append_sheet(wb, detailSheet, 'All Expenses');
+
+      // Unpaid Expenses Sheet
+      const unpaidExpenses = (detailedExpenseReport?.expenses || []).filter(e => !e.is_paid);
+      if (unpaidExpenses.length > 0) {
+        const unpaidRows = unpaidExpenses.map(e => [
+          e.date,
+          e.vendor,
+          e.category,
+          e.description,
+          e.amount,
+          e.vat,
+          e.total
+        ]);
+        const unpaidSheet = XLSX.utils.aoa_to_sheet([
+          ['UNPAID EXPENSES'],
+          [],
+          ['Date', 'Vendor', 'Category', 'Description', 'Amount', 'VAT', 'Total'],
+          ...unpaidRows
+        ]);
+        XLSX.utils.book_append_sheet(wb, unpaidSheet, 'Unpaid');
+      }
 
       saveAs(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })]),
-        `Expense_Report_${propertyName}_${selectedYear}.xlsx`);
+        `Expense_Report_${propertyName}_${periodLabel.replace(' ', '_')}.xlsx`);
       return;
     }
 
@@ -391,34 +477,115 @@ export default function Reports() {
     }
 
     if (reportType === 'expenses') {
-      // Expenses Only PDF
+      // Detailed Expenses PDF
       doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
       doc.text('Expense Report', pageWidth / 2, 20, { align: 'center' });
 
       doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
       doc.text(propertyName, pageWidth / 2, 28, { align: 'center' });
       doc.text(`Period: ${periodLabel}`, pageWidth / 2, 35, { align: 'center' });
       doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy')}`, pageWidth / 2, 42, { align: 'center' });
 
+      // Summary Section
       doc.setFontSize(14);
-      doc.text(`Total Expenses: ${formatCurrency(kpis?.total_expenses)}`, 14, 55);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Summary', 14, 55);
 
-      doc.setFontSize(14);
-      doc.text('Expense Breakdown', 14, 70);
-
+      const summaryData = detailedExpenseReport?.summary;
       autoTable(doc, {
-        startY: 75,
-        head: [['Category', 'Amount', '%']],
-        body: expenseBreakdown.map(e => [
-          e.category_name,
-          formatCurrency(e.amount),
-          `${toNum(e.percentage).toFixed(1)}%`
+        startY: 60,
+        head: [['Total Expenses', 'Total Paid', 'Outstanding', 'Expense Count']],
+        body: [[
+          formatCurrency(summaryData?.total_expenses),
+          formatCurrency(summaryData?.total_paid),
+          formatCurrency(summaryData?.total_unpaid),
+          `${summaryData?.expense_count || 0} items`
+        ]],
+        theme: 'grid',
+        headStyles: { fillColor: [185, 28, 28], textColor: 255 },
+        styles: { halign: 'center' }
+      });
+
+      // Category Breakdown
+      let yPos = (doc as any).lastAutoTable.finalY + 15;
+      doc.setFontSize(14);
+      doc.text('Expense Breakdown by Category', 14, yPos);
+
+      const categoryData = detailedExpenseReport?.category_breakdown || [];
+      autoTable(doc, {
+        startY: yPos + 5,
+        head: [['Category', 'Total', 'Paid', 'Unpaid', '%']],
+        body: categoryData.map(c => [
+          c.category,
+          formatCurrency(c.total),
+          formatCurrency(c.paid),
+          formatCurrency(c.unpaid),
+          `${c.percentage}%`
         ]),
         theme: 'striped',
         headStyles: { fillColor: [185, 28, 28] },
       });
 
-      doc.save(`Expense_Report_${propertyName}_${selectedYear}.pdf`);
+      // Detailed Expenses Table
+      yPos = (doc as any).lastAutoTable.finalY + 15;
+
+      // Check if we need a new page
+      if (yPos > 240) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setFontSize(14);
+      doc.text('Detailed Expenses', 14, yPos);
+
+      const expenseDetails = detailedExpenseReport?.expenses || [];
+      autoTable(doc, {
+        startY: yPos + 5,
+        head: [['Date', 'Vendor', 'Category', 'Description', 'Amount', 'VAT', 'Total', 'Paid']],
+        body: expenseDetails.map(e => [
+          format(new Date(e.date), 'dd MMM yyyy'),
+          e.vendor || '-',
+          e.category,
+          e.description.substring(0, 30) + (e.description.length > 30 ? '...' : ''),
+          formatCurrency(e.amount),
+          formatCurrency(e.vat),
+          formatCurrency(e.total),
+          e.is_paid ? '✓' : '✗'
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [185, 28, 28], fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        columnStyles: {
+          0: { cellWidth: 22 },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 28 },
+          3: { cellWidth: 35 },
+          4: { cellWidth: 20, halign: 'right' },
+          5: { cellWidth: 18, halign: 'right' },
+          6: { cellWidth: 22, halign: 'right' },
+          7: { cellWidth: 12, halign: 'center' }
+        }
+      });
+
+      // Unpaid Summary at the end
+      const unpaidExpenses = expenseDetails.filter(e => !e.is_paid);
+      if (unpaidExpenses.length > 0) {
+        yPos = (doc as any).lastAutoTable.finalY + 15;
+
+        if (yPos > 250) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        doc.setFontSize(14);
+        doc.setTextColor(185, 28, 28);
+        doc.text(`Outstanding Payments: ${formatCurrency(summaryData?.total_unpaid)} (${unpaidExpenses.length} items)`, 14, yPos);
+        doc.setTextColor(0, 0, 0);
+      }
+
+      doc.save(`Expense_Report_${propertyName}_${periodLabel.replace(' ', '_')}.pdf`);
       return;
     }
 
@@ -807,22 +974,65 @@ export default function Reports() {
 
       {/* Two Column Layout */}
       <div className="grid md:grid-cols-2 gap-4">
-        {/* Expense Breakdown */}
+        {/* Expense Breakdown - Enhanced */}
         {(reportType === 'full' || reportType === 'expenses') && (
           <div className="bg-white border border-stone-200 rounded">
-            <div className="px-4 py-3 border-b border-stone-200">
+            <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-stone-800">Expense Breakdown</h2>
+              {reportType === 'expenses' && (
+                <select
+                  value={expenseFilter}
+                  onChange={(e) => setExpenseFilter(e.target.value as 'all' | 'paid' | 'unpaid')}
+                  className="text-xs border border-stone-200 rounded px-2 py-1"
+                >
+                  <option value="all">All Expenses</option>
+                  <option value="paid">Paid Only</option>
+                  <option value="unpaid">Unpaid Only</option>
+                </select>
+              )}
             </div>
+
+            {/* Summary Cards for Expense Report */}
+            {reportType === 'expenses' && detailedExpenseReport && (
+              <div className="px-4 py-3 grid grid-cols-3 gap-3 border-b border-stone-100">
+                <div className="p-2 bg-stone-50 rounded text-center">
+                  <p className="text-xs text-stone-500">Total</p>
+                  <p className="text-sm font-semibold text-stone-800">{formatCurrency(detailedExpenseReport.summary.total_expenses)}</p>
+                </div>
+                <div className="p-2 bg-green-50 rounded text-center">
+                  <p className="text-xs text-green-600">Paid</p>
+                  <p className="text-sm font-semibold text-green-700">{formatCurrency(detailedExpenseReport.summary.total_paid)}</p>
+                </div>
+                <div className="p-2 bg-red-50 rounded text-center">
+                  <p className="text-xs text-red-600">Unpaid</p>
+                  <p className="text-sm font-semibold text-red-700">{formatCurrency(detailedExpenseReport.summary.total_unpaid)}</p>
+                </div>
+              </div>
+            )}
+
             <div className="p-4">
-              {expenseBreakdown.length === 0 ? (
+              {/* Category Breakdown */}
+              {(detailedExpenseReport?.category_breakdown || expenseBreakdown).length === 0 ? (
                 <p className="text-sm text-stone-500">No expenses for this period</p>
               ) : (
                 <div className="space-y-2">
-                  {expenseBreakdown.map((expense, index) => (
+                  {(reportType === 'expenses' && detailedExpenseReport ? detailedExpenseReport.category_breakdown : expenseBreakdown.map(e => ({
+                    category: e.category_name,
+                    total: e.amount,
+                    paid: 0,
+                    unpaid: 0,
+                    count: 0,
+                    percentage: e.percentage
+                  }))).map((expense, index) => (
                     <div key={index} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
-                      <span className="text-sm text-stone-700">{expense.category_name}</span>
+                      <div>
+                        <span className="text-sm text-stone-700">{expense.category || (expense as any).category_name}</span>
+                        {reportType === 'expenses' && (
+                          <span className="text-xs text-stone-400 ml-2">({expense.count} items)</span>
+                        )}
+                      </div>
                       <div className="text-right">
-                        <span className="text-sm font-medium text-stone-800 tabular-nums">{formatCurrency(expense.amount)}</span>
+                        <span className="text-sm font-medium text-stone-800 tabular-nums">{formatCurrency(expense.total || (expense as any).amount)}</span>
                         <span className="text-xs text-stone-500 ml-2 tabular-nums">({toNum(expense.percentage).toFixed(1)}%)</span>
                       </div>
                     </div>
@@ -830,6 +1040,47 @@ export default function Reports() {
                 </div>
               )}
             </div>
+
+            {/* Detailed Expense List for Expense Report */}
+            {reportType === 'expenses' && detailedExpenseReport && (
+              <div className="border-t border-stone-200">
+                <div className="px-4 py-2 bg-stone-50">
+                  <h3 className="text-xs font-medium text-stone-600 uppercase">Detailed Expenses</h3>
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                  <table className="w-full">
+                    <thead className="sticky top-0 bg-white">
+                      <tr className="border-b border-stone-200">
+                        <th className="px-3 py-2 text-left text-xs font-medium text-stone-500">Date</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-stone-500">Vendor</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-stone-500">Description</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-stone-500">Total</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-stone-500">Paid</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailedExpenseReport.expenses
+                        .filter(e => expenseFilter === 'all' || (expenseFilter === 'paid' ? e.is_paid : !e.is_paid))
+                        .map((expense) => (
+                        <tr key={expense.id} className="border-b border-stone-100 hover:bg-stone-50">
+                          <td className="px-3 py-2 text-xs text-stone-600">{format(new Date(expense.date), 'dd MMM')}</td>
+                          <td className="px-3 py-2 text-xs text-stone-800 font-medium">{expense.vendor || '-'}</td>
+                          <td className="px-3 py-2 text-xs text-stone-600 truncate max-w-xs">{expense.description}</td>
+                          <td className="px-3 py-2 text-xs text-stone-800 text-right tabular-nums">{formatCurrency(expense.total)}</td>
+                          <td className="px-3 py-2 text-center">
+                            {expense.is_paid ? (
+                              <span className="text-green-600">✓</span>
+                            ) : (
+                              <span className="text-red-600">✗</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

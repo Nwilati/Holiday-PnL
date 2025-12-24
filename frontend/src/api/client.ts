@@ -212,6 +212,16 @@ const api = {
   getPropertyROI: (year?: number) =>
     axiosInstance.get('/dashboard/property-roi', { params: year ? { year } : {} }),
 
+  getDetailedExpenseReport: (propertyId: string, startDate: string, endDate: string, isPaid?: boolean) =>
+    axiosInstance.get('/expenses/report/detailed', {
+      params: {
+        property_id: propertyId,
+        start_date: startDate,
+        end_date: endDate,
+        ...(isPaid !== undefined && { is_paid: isPaid })
+      }
+    }),
+
   // Receipts
   getReceipts: (expenseId: string) => axiosInstance.get(`/receipts/${expenseId}`),
   uploadReceipt: (expenseId: string, file: File) => {
