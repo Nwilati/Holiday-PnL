@@ -552,7 +552,7 @@ export default function Reports() {
           formatCurrency(e.amount),
           formatCurrency(e.vat),
           formatCurrency(e.total),
-          e.is_paid ? '✓' : '✗'
+          e.is_paid ? 'PAID' : 'UNPAID'
         ]),
         theme: 'striped',
         headStyles: { fillColor: [185, 28, 28], fontSize: 8 },
