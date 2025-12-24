@@ -566,6 +566,16 @@ export default function Reports() {
           5: { cellWidth: 18, halign: 'right' },
           6: { cellWidth: 22, halign: 'right' },
           7: { cellWidth: 12, halign: 'center' }
+        },
+        didParseCell: (data) => {
+          // Color the Paid column (index 7)
+          if (data.section === 'body' && data.column.index === 7) {
+            if (data.cell.raw === 'PAID') {
+              data.cell.styles.textColor = [22, 163, 74]; // Green
+            } else if (data.cell.raw === 'UNPAID') {
+              data.cell.styles.textColor = [220, 38, 38]; // Red
+            }
+          }
         }
       });
 
