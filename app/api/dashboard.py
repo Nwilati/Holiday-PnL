@@ -509,14 +509,14 @@ def get_property_roi(
             cast(Booking.status, String).notin_(['cancelled', 'no_show'])
         ).scalar() or 0
 
-        # Get tenancy revenue
+        # Get tenancy revenue (expected annual rent from active contracts)
         tenancy_revenue = db.query(
-            func.sum(TenancyCheque.amount).label('amount')
-        ).join(Tenancy).filter(
+            func.sum(Tenancy.annual_rent).label('amount')
+        ).filter(
             Tenancy.property_id == prop.id,
-            TenancyCheque.status == 'cleared',
-            TenancyCheque.due_date >= start,
-            TenancyCheque.due_date <= end
+            Tenancy.status == 'active',
+            Tenancy.contract_start <= end,
+            Tenancy.contract_end >= start
         ).scalar() or 0
 
         # Get expenses
