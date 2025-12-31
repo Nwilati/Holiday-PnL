@@ -471,7 +471,7 @@ def get_expense_breakdown_all(
         {
             'name': r.name,
             'value': float(r.amount or 0),
-            'percentage': round(float((r.amount or 0) / total * 100), 1) if total > 0 else 0,
+            'percentage': round(float(r.amount or 0) / total * 100, 1) if total > 0 else 0,
             'color': colors[i % len(colors)]
         }
         for i, r in enumerate(results)
