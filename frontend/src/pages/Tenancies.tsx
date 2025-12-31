@@ -736,6 +736,9 @@ export default function Tenancies() {
                     <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(tenancy.status)}`}>
                       {tenancy.status.charAt(0).toUpperCase() + tenancy.status.slice(1)}
                     </span>
+                    {tenancy.previous_tenancy_id && (
+                      <span className="ml-1 text-xs text-sky-600">↻</span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1">

@@ -1123,15 +1123,14 @@ def get_annual_revenue(
             )
         """
 
-    # Get cleared cheque amounts
+    # Get cleared cheque amounts (filter by cheque due date within period)
     cleared_sql = text(f"""
         SELECT COALESCE(SUM(c.amount), 0) as total
         FROM tenancy_cheques c
         JOIN tenancies t ON c.tenancy_id = t.id
         WHERE c.status = 'cleared'
         {property_filter}
-        {date_filter}
-    """)
+    """ + (" AND c.due_date BETWEEN :start_date AND :end_date" if start_date and end_date else ""))
 
     # Get pending cheque amounts
     pending_sql = text(f"""
