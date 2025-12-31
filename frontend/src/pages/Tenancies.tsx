@@ -372,8 +372,8 @@ export default function Tenancies() {
         num_cheques: Number(renewalData.num_cheques) as 0 | 1 | 2 | 3 | 4 | 6 | 12,
         auto_split_cheques: true,
         security_deposit: selectedTenancy.security_deposit,
-        ejari_number: selectedTenancy.ejari_number || null,
-        notes: selectedTenancy.notes || null,
+        ejari_number: selectedTenancy.ejari_number || undefined,
+        notes: selectedTenancy.notes || undefined,
       });
       setShowRenewalModal(false);
       loadTenancies();
