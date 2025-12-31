@@ -370,6 +370,10 @@ export default function Tenancies() {
         annual_rent: Number(renewalData.annual_rent),
         contract_value: Number(renewalData.annual_rent),
         num_cheques: Number(renewalData.num_cheques) as 0 | 1 | 2 | 3 | 4 | 6 | 12,
+        auto_split_cheques: true,
+        security_deposit: selectedTenancy.security_deposit,
+        ejari_number: selectedTenancy.ejari_number || null,
+        notes: selectedTenancy.notes || null,
       });
       setShowRenewalModal(false);
       loadTenancies();
