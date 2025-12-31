@@ -1132,22 +1132,21 @@ def get_annual_revenue(
         {property_filter}
     """ + (" AND c.due_date BETWEEN :start_date AND :end_date" if start_date and end_date else ""))
 
-    # Get pending cheque amounts
+    # Get pending cheque amounts (filter by cheque due date within period)
     pending_sql = text(f"""
         SELECT COALESCE(SUM(c.amount), 0) as total
         FROM tenancy_cheques c
         JOIN tenancies t ON c.tenancy_id = t.id
         WHERE c.status IN ('pending', 'deposited')
-        AND t.status = 'active'
+        AND t.status IN ('active', 'renewed')
         {property_filter}
-        {date_filter}
-    """)
+    """ + (" AND c.due_date BETWEEN :start_date AND :end_date" if start_date and end_date else ""))
 
-    # Get total contract value
+    # Get total contract value (include renewed contracts that overlap the period)
     contract_sql = text(f"""
         SELECT COALESCE(SUM(t.contract_value), 0) as total
         FROM tenancies t
-        WHERE t.status = 'active'
+        WHERE t.status IN ('active', 'renewed')
         {property_filter}
         {date_filter}
     """)
