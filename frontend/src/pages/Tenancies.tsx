@@ -984,6 +984,14 @@ export default function Tenancies() {
                 <div>
                   <h2 className="text-base font-semibold text-stone-900">{selectedTenancy.tenant_name}</h2>
                   <p className="text-sm text-stone-500">{selectedTenancy.tenant_email} • {selectedTenancy.tenant_phone}</p>
+                  <p className="text-xs text-stone-500">
+                    Contract: {new Date(selectedTenancy.contract_start).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {' - '}
+                    {new Date(selectedTenancy.contract_end).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {selectedTenancy.previous_tenancy_id && (
+                      <span className="ml-2 text-sky-600">(Renewal)</span>
+                    )}
+                  </p>
                 </div>
                 <button onClick={() => setShowDetailsModal(false)} className="p-1 text-stone-400 hover:text-stone-600">
                   <X className="w-4 h-4" />
