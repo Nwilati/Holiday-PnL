@@ -82,13 +82,15 @@ export default function OffPlan() {
   });
 
   // Payment schedule state
-  const [payments, setPayments] = useState<{
+  interface PaymentFormData {
+    id?: string;  // undefined for new, has value for existing
     installment_number: number;
     milestone_name: string;
     percentage: number;
     amount: number;
     due_date: string;
-  }[]>([]);
+  }
+  const [payments, setPayments] = useState<PaymentFormData[]>([]);
 
   // Mark paid form
   const [markPaidData, setMarkPaidData] = useState({
@@ -314,8 +316,15 @@ export default function OffPlan() {
       dlp_waiver_years: property.dlp_waiver_years || 0,
       notes: property.notes || '',
     });
-    // Load existing payments
-    setPayments([]);
+    // Load existing payments - map them to include their IDs
+    setPayments(property.payments?.map(p => ({
+      id: p.id,
+      installment_number: p.installment_number,
+      milestone_name: p.milestone_name,
+      percentage: p.percentage,
+      amount: p.amount,
+      due_date: p.due_date || '',
+    })) || []);
     setShowFormModal(true);
   };
 
@@ -341,21 +350,45 @@ export default function OffPlan() {
     e.preventDefault();
     try {
       const totalCost = calculateTotalCost();
-      const dataToSubmit = {
-        ...formData,
-        total_cost: totalCost,
-        payments: payments.length > 0 ? payments.map(p => ({
-          installment_number: p.installment_number,
-          milestone_name: p.milestone_name,
-          percentage: p.percentage,
-          amount: p.amount,
-          due_date: p.due_date || undefined,
-        })) : undefined,
-      };
 
       if (selectedProperty) {
+        // Update existing property
+        console.log('Updating property with payments:', payments);
+
+        // First, update the property details (without payments in the update call)
+        const dataToSubmit = {
+          ...formData,
+          total_cost: totalCost,
+        };
         await api.updateOffplanProperty(selectedProperty.id, dataToSubmit);
+
+        // Then add new payments separately (those without an 'id' field)
+        const newPayments = payments.filter(p => !p.id);
+        console.log('Adding new payments:', newPayments);
+
+        for (const payment of newPayments) {
+          await api.addOffplanPayment(selectedProperty.id, {
+            installment_number: payment.installment_number,
+            milestone_name: payment.milestone_name,
+            percentage: payment.percentage,
+            amount: payment.amount,
+            due_date: payment.due_date || undefined,
+          });
+        }
       } else {
+        // Create new property with all payments
+        console.log('Creating property with payments:', payments);
+        const dataToSubmit = {
+          ...formData,
+          total_cost: totalCost,
+          payments: payments.length > 0 ? payments.map(p => ({
+            installment_number: p.installment_number,
+            milestone_name: p.milestone_name,
+            percentage: p.percentage,
+            amount: p.amount,
+            due_date: p.due_date || undefined,
+          })) : undefined,
+        };
         await api.createOffplanProperty(dataToSubmit);
       }
 
