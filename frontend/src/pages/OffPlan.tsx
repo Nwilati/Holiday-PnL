@@ -1,19 +1,18 @@
 import { useState, useEffect } from 'react';
 import {
-  Building2,
   Plus,
   Edit,
   Trash2,
   Check,
   Calendar,
   MapPin,
-  CreditCard,
   X,
   AlertTriangle,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import { api, OffplanProperty, OffplanPropertyCreate, OffplanPayment, OffplanInvestmentSummary } from '../api/client';
+import { api } from '../api/client';
+import type { OffplanProperty, OffplanPropertyCreate, OffplanPayment, OffplanInvestmentSummary } from '../api/client';
 
 // Status badge colors
 const getStatusColor = (status: string) => {
@@ -326,7 +325,7 @@ export default function OffPlan() {
           <div className="bg-white rounded-lg border border-stone-200 p-4">
             <div className="text-sm text-stone-500 mb-1">Remaining</div>
             <div className="text-2xl font-semibold text-amber-600">
-              AED {formatCurrency(summary.total_pending + summary.total_overdue)}
+              AED {formatCurrency(summary.total_investment - summary.total_paid)}
             </div>
           </div>
           <div className="bg-white rounded-lg border border-stone-200 p-4">
