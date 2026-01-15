@@ -77,6 +77,15 @@ export default function OffPlan() {
     notes: '',
   });
 
+  // Payment schedule state
+  const [payments, setPayments] = useState<{
+    installment_number: number;
+    milestone_name: string;
+    percentage: number;
+    amount: number;
+    due_date: string;
+  }[]>([]);
+
   // Mark paid form
   const [markPaidData, setMarkPaidData] = useState({
     paid_date: '',
@@ -161,7 +170,111 @@ export default function OffPlan() {
       dlp_waiver_years: 0,
       notes: '',
     });
+    setPayments([]);
     setShowFormModal(true);
+  };
+
+  const addPayment = () => {
+    const newPayment = {
+      installment_number: payments.length + 1,
+      milestone_name: '',
+      percentage: 0,
+      amount: 0,
+      due_date: '',
+    };
+    setPayments([...payments, newPayment]);
+  };
+
+  const updatePayment = (index: number, field: string, value: any) => {
+    const updatedPayments = [...payments];
+    updatedPayments[index] = { ...updatedPayments[index], [field]: value };
+
+    // Auto-calculate amount if percentage changes
+    if (field === 'percentage') {
+      const basePrice = Number(formData.base_price) || 0;
+      updatedPayments[index].amount = (basePrice * value) / 100;
+    }
+
+    setPayments(updatedPayments);
+  };
+
+  const deletePayment = (index: number) => {
+    const updatedPayments = payments.filter((_, i) => i !== index);
+    // Renumber installments
+    updatedPayments.forEach((p, i) => {
+      p.installment_number = i + 1;
+    });
+    setPayments(updatedPayments);
+  };
+
+  const addStandard6040 = () => {
+    const basePrice = Number(formData.base_price) || 0;
+    const today = new Date().toISOString().split('T')[0];
+    setPayments([
+      {
+        installment_number: 1,
+        milestone_name: 'Booking (60%)',
+        percentage: 60,
+        amount: (basePrice * 60) / 100,
+        due_date: today,
+      },
+      {
+        installment_number: 2,
+        milestone_name: 'Handover (40%)',
+        percentage: 40,
+        amount: (basePrice * 40) / 100,
+        due_date: formData.expected_handover || '',
+      },
+    ]);
+  };
+
+  const addConstructionLinked = () => {
+    const basePrice = Number(formData.base_price) || 0;
+    const today = new Date().toISOString().split('T')[0];
+    setPayments([
+      {
+        installment_number: 1,
+        milestone_name: 'Booking (10%)',
+        percentage: 10,
+        amount: (basePrice * 10) / 100,
+        due_date: today,
+      },
+      {
+        installment_number: 2,
+        milestone_name: 'SPA Signing (10%)',
+        percentage: 10,
+        amount: (basePrice * 10) / 100,
+        due_date: '',
+      },
+      {
+        installment_number: 3,
+        milestone_name: '25% Construction (20%)',
+        percentage: 20,
+        amount: (basePrice * 20) / 100,
+        due_date: '',
+      },
+      {
+        installment_number: 4,
+        milestone_name: '50% Construction (20%)',
+        percentage: 20,
+        amount: (basePrice * 20) / 100,
+        due_date: '',
+      },
+      {
+        installment_number: 5,
+        milestone_name: '75% Construction (20%)',
+        percentage: 20,
+        amount: (basePrice * 20) / 100,
+        due_date: '',
+      },
+      {
+        installment_number: 6,
+        milestone_name: 'Handover (20%)',
+        percentage: 20,
+        amount: (basePrice * 20) / 100,
+        due_date: formData.expected_handover || '',
+      },
+    ]);
   };
 
   const handleEditProperty = (property: OffplanProperty, e: React.MouseEvent) => {
@@ -190,6 +303,8 @@ export default function OffPlan() {
       dlp_waiver_years: property.dlp_waiver_years || 0,
       notes: property.notes || '',
     });
+    // Load existing payments
+    setPayments([]);
     setShowFormModal(true);
   };
 
@@ -218,6 +333,13 @@ export default function OffPlan() {
       const dataToSubmit = {
         ...formData,
         total_cost: totalCost,
+        payments: payments.length > 0 ? payments.map(p => ({
+          installment_number: p.installment_number,
+          milestone_name: p.milestone_name,
+          percentage: p.percentage,
+          amount: p.amount,
+          due_date: p.due_date || undefined,
+        })) : undefined,
       };
 
       if (selectedProperty) {
@@ -780,6 +902,112 @@ export default function OffPlan() {
                   </div>
                 </div>
 
+                {/* Payment Schedule Section */}
+                <div className="border-t border-stone-200 pt-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-medium text-stone-900">Payment Schedule</h3>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={addStandard6040}
+                        className="px-3 py-1.5 text-sm border border-stone-300 text-stone-700 rounded-lg hover:bg-stone-50"
+                      >
+                        Add Standard 60/40
+                      </button>
+                      <button
+                        type="button"
+                        onClick={addConstructionLinked}
+                        className="px-3 py-1.5 text-sm border border-stone-300 text-stone-700 rounded-lg hover:bg-stone-50"
+                      >
+                        Add Construction Linked
+                      </button>
+                      <button
+                        type="button"
+                        onClick={addPayment}
+                        className="px-3 py-1.5 text-sm bg-sky-600 text-white rounded-lg hover:bg-sky-700 flex items-center gap-1"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Payment
+                      </button>
+                    </div>
+                  </div>
+
+                  {payments.length > 0 ? (
+                    <div className="border border-stone-200 rounded-lg overflow-hidden">
+                      <table className="w-full">
+                        <thead className="bg-stone-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-stone-600">#</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-stone-600">Milestone</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-stone-600">%</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-stone-600">Amount AED</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-stone-600">Due Date</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-stone-600"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-200">
+                          {payments.map((payment, index) => (
+                            <tr key={index}>
+                              <td className="px-3 py-2 text-sm text-stone-600">{payment.installment_number}</td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="text"
+                                  value={payment.milestone_name}
+                                  onChange={(e) => updatePayment(index, 'milestone_name', e.target.value)}
+                                  placeholder="e.g., Booking, SPA, Handover"
+                                  className="w-full px-2 py-1 text-sm border border-stone-300 rounded focus:ring-1 focus:ring-sky-500"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.01"
+                                  value={payment.percentage}
+                                  onChange={(e) => updatePayment(index, 'percentage', parseFloat(e.target.value) || 0)}
+                                  className="w-20 px-2 py-1 text-sm border border-stone-300 rounded focus:ring-1 focus:ring-sky-500"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={payment.amount}
+                                  onChange={(e) => updatePayment(index, 'amount', parseFloat(e.target.value) || 0)}
+                                  className="w-32 px-2 py-1 text-sm border border-stone-300 rounded focus:ring-1 focus:ring-sky-500"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="date"
+                                  value={payment.due_date}
+                                  onChange={(e) => updatePayment(index, 'due_date', e.target.value)}
+                                  className="w-full px-2 py-1 text-sm border border-stone-300 rounded focus:ring-1 focus:ring-sky-500"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <button
+                                  type="button"
+                                  onClick={() => deletePayment(index)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-sm text-stone-500 bg-stone-50 rounded-lg border border-stone-200">
+                      No payment schedule added. Use quick actions or add payments manually.
+                    </div>
+                  )}
+                </div>
+
                 {/* Notes */}
                 <div>
                   <label className="block text-sm font-medium text-stone-700 mb-2">
@@ -892,14 +1120,16 @@ export default function OffPlan() {
                 <label className="block text-sm font-medium text-stone-700 mb-2">
                   Payment Method *
                 </label>
-                <input
-                  type="text"
+                <select
                   required
                   value={markPaidData.payment_method}
                   onChange={(e) => setMarkPaidData({ ...markPaidData, payment_method: e.target.value })}
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-                  placeholder="e.g., Bank Transfer, Cheque"
-                />
+                >
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="cash">Cash</option>
+                </select>
               </div>
 
               <div>

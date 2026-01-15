@@ -9,6 +9,7 @@ import {
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { api } from '../api/client';
+import type { UpcomingOffplanPaymentsResponse, OffplanInvestmentSummary } from '../api/client';
 
 interface Property {
   id: string;
@@ -173,6 +174,8 @@ export default function Dashboard() {
   const [expenseBreakdown, setExpenseBreakdown] = useState<ExpenseCategory[]>([]);
   const [propertyROI, setPropertyROI] = useState<PropertyROI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [upcomingOffplanPayments, setUpcomingOffplanPayments] = useState<UpcomingOffplanPaymentsResponse | null>(null);
+  const [offplanSummary, setOffplanSummary] = useState<OffplanInvestmentSummary | null>(null);
 
   const currentYear = new Date().getFullYear();
 
@@ -192,6 +195,8 @@ export default function Dashboard() {
       loadExpenseBreakdown();
       loadPropertyROI();
     }
+    // Load off-plan data regardless of properties
+    loadOffplanData();
   }, [selectedProperty, selectedYear, properties]);
 
   const loadProperties = async () => {
@@ -392,7 +397,28 @@ export default function Dashboard() {
     }
   };
 
+  const loadOffplanData = async () => {
+    try {
+      const [paymentsRes, summaryRes] = await Promise.all([
+        api.getUpcomingOffplanPayments({ days: 30 }),
+        api.getOffplanInvestmentSummary(),
+      ]);
+      setUpcomingOffplanPayments(paymentsRes.data);
+      setOffplanSummary(summaryRes.data);
+    } catch (error) {
+      console.error('Failed to load off-plan data:', error);
+      setUpcomingOffplanPayments(null);
+      setOffplanSummary(null);
+    }
+  };
+
   // Helper functions
+  const getDaysColor = (days: number) => {
+    if (days < 7) return 'text-red-600';
+    if (days < 14) return 'text-amber-600';
+    return 'text-green-600';
+  };
+
   const getCombinedRevenue = () => {
     const shortTerm = Number(kpis?.total_revenue) || 0;
     const longTerm = Number(annualRevenue?.total_contract_value) || 0;  // Use expected, not cleared
@@ -917,6 +943,80 @@ export default function Dashboard() {
           </tbody>
         </table>
       </div>
+
+      {/* Off-Plan Investment Summary */}
+      {offplanSummary && offplanSummary.total_properties > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white border border-stone-200 rounded-lg p-4">
+            <div className="text-xs text-stone-500 uppercase tracking-wide mb-1">Off-Plan Properties</div>
+            <div className="text-2xl font-semibold text-stone-900">{offplanSummary.total_properties}</div>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-lg p-4">
+            <div className="text-xs text-stone-500 uppercase tracking-wide mb-1">Total Investment</div>
+            <div className="text-2xl font-semibold text-stone-900">AED {formatAmount(offplanSummary.total_investment)}</div>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-lg p-4">
+            <div className="text-xs text-stone-500 uppercase tracking-wide mb-1">Total Paid</div>
+            <div className="text-2xl font-semibold text-green-600">AED {formatAmount(offplanSummary.total_paid)}</div>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-lg p-4">
+            <div className="text-xs text-stone-500 uppercase tracking-wide mb-1">Remaining</div>
+            <div className="text-2xl font-semibold text-amber-600">
+              AED {formatAmount(offplanSummary.total_investment - offplanSummary.total_paid)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upcoming Off-Plan Payments */}
+      {upcomingOffplanPayments && upcomingOffplanPayments.payments.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-lg">
+          <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
+            <h2 className="text-sm font-medium text-stone-700">Upcoming Off-Plan Payments</h2>
+            <Link to="/offplan" className="text-xs text-sky-600 hover:text-sky-700 flex items-center gap-1">
+              View all <ChevronRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <table className="w-full">
+            <thead>
+              <tr className="bg-stone-50 text-left">
+                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Project</th>
+                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Unit</th>
+                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Milestone</th>
+                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Amount</th>
+                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Due Date</th>
+                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Days</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {upcomingOffplanPayments.payments.slice(0, 5).map((payment) => (
+                <tr key={payment.payment_id} className="hover:bg-stone-50">
+                  <td className="px-4 py-2.5 text-sm font-medium text-stone-900">{payment.project_name}</td>
+                  <td className="px-4 py-2.5 text-sm text-stone-600">{payment.unit_number}</td>
+                  <td className="px-4 py-2.5 text-sm text-stone-600">{payment.milestone_name}</td>
+                  <td className="px-4 py-2.5 text-sm font-medium text-stone-900 text-right tabular-nums">
+                    AED {formatAmount(payment.amount)}
+                  </td>
+                  <td className="px-4 py-2.5 text-sm text-stone-600 text-right">{formatDate(payment.due_date)}</td>
+                  <td className={`px-4 py-2.5 text-sm font-medium text-right ${getDaysColor(payment.days_until_due)}`}>
+                    {payment.days_until_due}d
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-stone-50 border-t border-stone-200">
+              <tr>
+                <td colSpan={3} className="px-4 py-2.5 text-sm font-medium text-stone-700">
+                  Total Due (30 days)
+                </td>
+                <td colSpan={3} className="px-4 py-2.5 text-sm font-semibold text-stone-900 text-right tabular-nums">
+                  AED {formatAmount(upcomingOffplanPayments.total_amount)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
