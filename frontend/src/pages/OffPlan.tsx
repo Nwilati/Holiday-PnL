@@ -45,6 +45,9 @@ export default function OffPlan() {
   const [properties, setProperties] = useState<OffplanProperty[]>([]);
   const [summary, setSummary] = useState<OffplanInvestmentSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isMarkingPaid, setIsMarkingPaid] = useState(false);
   const [expandedPropertyId, setExpandedPropertyId] = useState<string | null>(null);
 
   // Modals
@@ -348,6 +351,9 @@ export default function OffPlan() {
 
   const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return; // Prevent double submission
+
+    setIsSaving(true);
     try {
       const totalCost = calculateTotalCost();
 
@@ -398,11 +404,15 @@ export default function OffPlan() {
     } catch (error) {
       console.error('Failed to save property:', error);
       alert('Failed to save property. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleConfirmDelete = async () => {
-    if (!selectedProperty) return;
+    if (!selectedProperty || isDeleting) return;
+
+    setIsDeleting(true);
     try {
       await api.deleteOffplanProperty(selectedProperty.id);
       setShowDeleteConfirm(false);
@@ -412,12 +422,16 @@ export default function OffPlan() {
     } catch (error) {
       console.error('Failed to delete property:', error);
       alert('Failed to delete property. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const handleSubmitMarkPaid = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPayment) return;
+    if (!selectedPayment || isMarkingPaid) return;
+
+    setIsMarkingPaid(true);
     try {
       await api.markOffplanPaymentPaid(selectedPayment.id, {
         paid_date: markPaidData.paid_date,
@@ -432,6 +446,8 @@ export default function OffPlan() {
     } catch (error) {
       console.error('Failed to mark payment as paid:', error);
       alert('Failed to mark payment as paid. Please try again.');
+    } finally {
+      setIsMarkingPaid(false);
     }
   };
 
@@ -1336,15 +1352,17 @@ export default function OffPlan() {
                   <button
                     type="button"
                     onClick={() => setShowFormModal(false)}
-                    className="px-4 py-2 border border-stone-300 text-stone-700 rounded-lg hover:bg-stone-50"
+                    disabled={isSaving}
+                    className={`px-4 py-2 border border-stone-300 text-stone-700 rounded-lg hover:bg-stone-50 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700"
+                    disabled={isSaving}
+                    className={`px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {selectedProperty ? 'Update Property' : 'Create Property'}
+                    {isSaving ? 'Saving...' : (selectedProperty ? 'Update Property' : 'Create Property')}
                   </button>
                 </div>
               </form>
@@ -1368,15 +1386,17 @@ export default function OffPlan() {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 border border-stone-300 text-stone-700 rounded-lg hover:bg-stone-50"
+                disabled={isDeleting}
+                className={`px-4 py-2 border border-stone-300 text-stone-700 rounded-lg hover:bg-stone-50 ${isDeleting ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                disabled={isDeleting}
+                className={`px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 ${isDeleting ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                Delete
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
@@ -1542,16 +1562,18 @@ export default function OffPlan() {
                 <button
                   type="button"
                   onClick={() => setShowMarkPaidModal(false)}
-                  className="px-4 py-2 border border-stone-300 text-stone-700 rounded-lg hover:bg-stone-50"
+                  disabled={isMarkingPaid}
+                  className={`px-4 py-2 border border-stone-300 text-stone-700 rounded-lg hover:bg-stone-50 ${isMarkingPaid ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+                  disabled={isMarkingPaid}
+                  className={`px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 ${isMarkingPaid ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Check className="w-4 h-4" />
-                  Mark as Paid
+                  {isMarkingPaid ? 'Saving...' : 'Mark as Paid'}
                 </button>
               </div>
             </form>
