@@ -491,7 +491,7 @@ export interface OffplanPropertyCreate {
   bedrooms?: number;
   bathrooms?: number;
   parking_spots?: number;
-  emirate: 'abu_dhabi' | 'dubai' | 'sharjah' | 'ajman' | 'ras_al_khaimah' | 'fujairah' | 'umm_al_quwain';
+  emirate?: 'abu_dhabi' | 'dubai' | 'sharjah' | 'ajman' | 'ras_al_khaimah' | 'fujairah' | 'umm_al_quwain';
   area?: string;
   community?: string;
   base_price: number;

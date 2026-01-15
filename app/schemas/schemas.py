@@ -646,10 +646,10 @@ class OffplanPropertyBase(BaseModel):
     total_area_sqm: Optional[Decimal] = None
     floor_number: Optional[int] = None
     building_number: Optional[str] = None
-    bedrooms: Optional[int] = None
-    bathrooms: Optional[Decimal] = None
-    parking_spots: Optional[int] = None
-    emirate: Literal['abu_dhabi', 'dubai', 'sharjah', 'ajman', 'ras_al_khaimah', 'fujairah', 'umm_al_quwain']
+    bedrooms: int = 1
+    bathrooms: Optional[Decimal] = Decimal("1")
+    parking_spots: int = 1
+    emirate: Literal['abu_dhabi', 'dubai', 'sharjah', 'ajman', 'ras_al_khaimah', 'fujairah', 'umm_al_quwain'] = 'abu_dhabi'
     area: Optional[str] = None
     community: Optional[str] = None
     base_price: Decimal
@@ -658,18 +658,19 @@ class OffplanPropertyBase(BaseModel):
     admin_fees: Decimal = Decimal("0")
     other_fees: Decimal = Decimal("0")
     total_cost: Decimal
-    purchase_date: date
+    purchase_date: Optional[date] = None
     expected_handover: Optional[date] = None
     actual_handover: Optional[date] = None
     status: Literal['active', 'handed_over', 'cancelled'] = 'active'
     converted_property_id: Optional[UUID] = None
     promotion_name: Optional[str] = None
-    amc_waiver_years: int = 0
-    dlp_waiver_years: int = 0
+    amc_waiver_years: Optional[Decimal] = None
+    dlp_waiver_years: Optional[Decimal] = None
     notes: Optional[str] = None
 
 class OffplanPropertyCreate(OffplanPropertyBase):
-    pass
+    total_cost: Optional[Decimal] = None  # Auto-calculated, override base
+    payments: Optional[List[OffplanPaymentCreate]] = None
 
 class OffplanPropertyUpdate(BaseModel):
     developer: Optional[str] = None
