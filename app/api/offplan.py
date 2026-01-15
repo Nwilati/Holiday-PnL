@@ -110,7 +110,7 @@ def create_offplan_property(property_data: OffplanPropertyCreate, db: Session = 
             :id, :developer, :project_name, :unit_number, :reference_number,
             :unit_type, :unit_model, :internal_area_sqm, :balcony_area_sqm, :total_area_sqm,
             :floor_number, :building_number, :bedrooms, :bathrooms, :parking_spots,
-            CAST(:emirate AS emirate_type), :area, :community,
+            CAST(:emirate AS emirate), :area, :community,
             :base_price, :land_dept_fee_percent, :land_dept_fee, :admin_fees, :other_fees, :total_cost,
             :purchase_date, :expected_handover, :actual_handover,
             CAST(:status AS offplan_status), :converted_property_id, :promotion_name, :amc_waiver_years, :dlp_waiver_years, :notes
@@ -265,7 +265,7 @@ def update_offplan_property(property_id: UUID, property_data: OffplanPropertyUpd
             if field == 'status':
                 set_clauses.append(f"status = CAST(:{field} AS offplan_status)")
             elif field == 'emirate':
-                set_clauses.append(f"emirate = CAST(:{field} AS emirate_type)")
+                set_clauses.append(f"emirate = CAST(:{field} AS emirate)")
             else:
                 set_clauses.append(f"{field} = :{field}")
             params[field] = value
