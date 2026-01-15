@@ -561,3 +561,189 @@ class UpcomingChequesResponse(BaseModel):
     cheques: List[UpcomingCheque]
     total_amount: Decimal
     count: int
+
+
+# ============================================================================
+# OFF-PLAN PAYMENT SCHEMAS
+# ============================================================================
+
+class OffplanPaymentBase(BaseModel):
+    installment_number: int
+    milestone_name: str
+    percentage: Optional[Decimal] = None
+    amount: Decimal
+    due_date: date
+    status: Optional[Literal['pending', 'paid', 'overdue']] = 'pending'
+    notes: Optional[str] = None
+
+class OffplanPaymentCreate(OffplanPaymentBase):
+    pass
+
+class OffplanPaymentUpdate(BaseModel):
+    installment_number: Optional[int] = None
+    milestone_name: Optional[str] = None
+    percentage: Optional[Decimal] = None
+    amount: Optional[Decimal] = None
+    due_date: Optional[date] = None
+    status: Optional[Literal['pending', 'paid', 'overdue']] = None
+    notes: Optional[str] = None
+
+class OffplanPaymentResponse(OffplanPaymentBase):
+    id: UUID
+    offplan_property_id: UUID
+    paid_date: Optional[date] = None
+    paid_amount: Optional[Decimal] = None
+    payment_method: Optional[str] = None
+    payment_reference: Optional[str] = None
+    receipt_url: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
+# OFF-PLAN DOCUMENT SCHEMAS
+# ============================================================================
+
+class OffplanDocumentBase(BaseModel):
+    document_type: str
+    document_name: str
+
+class OffplanDocumentCreate(OffplanDocumentBase):
+    file_data: str  # Base64 encoded
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+
+class OffplanDocumentResponse(OffplanDocumentBase):
+    id: UUID
+    offplan_property_id: UUID
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    uploaded_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class OffplanDocumentWithData(OffplanDocumentResponse):
+    file_data: str  # Include base64 data for download
+
+
+# ============================================================================
+# OFF-PLAN PROPERTY SCHEMAS
+# ============================================================================
+
+class OffplanPropertyBase(BaseModel):
+    developer: str
+    project_name: str
+    unit_number: str
+    reference_number: Optional[str] = None
+    unit_type: Optional[str] = None
+    unit_model: Optional[str] = None
+    internal_area_sqm: Optional[Decimal] = None
+    balcony_area_sqm: Optional[Decimal] = None
+    total_area_sqm: Optional[Decimal] = None
+    floor_number: Optional[int] = None
+    building_number: Optional[str] = None
+    bedrooms: Optional[int] = None
+    bathrooms: Optional[Decimal] = None
+    parking_spots: Optional[int] = None
+    emirate: Literal['abu_dhabi', 'dubai', 'sharjah', 'ajman', 'ras_al_khaimah', 'fujairah', 'umm_al_quwain']
+    area: Optional[str] = None
+    community: Optional[str] = None
+    base_price: Decimal
+    land_dept_fee_percent: Decimal = Decimal("4.00")
+    land_dept_fee: Optional[Decimal] = None
+    admin_fees: Decimal = Decimal("0")
+    other_fees: Decimal = Decimal("0")
+    total_cost: Decimal
+    purchase_date: date
+    expected_handover: Optional[date] = None
+    actual_handover: Optional[date] = None
+    status: Literal['active', 'handed_over', 'cancelled'] = 'active'
+    converted_property_id: Optional[UUID] = None
+    promotion_name: Optional[str] = None
+    amc_waiver_years: int = 0
+    dlp_waiver_years: int = 0
+    notes: Optional[str] = None
+
+class OffplanPropertyCreate(OffplanPropertyBase):
+    pass
+
+class OffplanPropertyUpdate(BaseModel):
+    developer: Optional[str] = None
+    project_name: Optional[str] = None
+    unit_number: Optional[str] = None
+    reference_number: Optional[str] = None
+    unit_type: Optional[str] = None
+    unit_model: Optional[str] = None
+    internal_area_sqm: Optional[Decimal] = None
+    balcony_area_sqm: Optional[Decimal] = None
+    total_area_sqm: Optional[Decimal] = None
+    floor_number: Optional[int] = None
+    building_number: Optional[str] = None
+    bedrooms: Optional[int] = None
+    bathrooms: Optional[Decimal] = None
+    parking_spots: Optional[int] = None
+    emirate: Optional[Literal['abu_dhabi', 'dubai', 'sharjah', 'ajman', 'ras_al_khaimah', 'fujairah', 'umm_al_quwain']] = None
+    area: Optional[str] = None
+    community: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    land_dept_fee_percent: Optional[Decimal] = None
+    land_dept_fee: Optional[Decimal] = None
+    admin_fees: Optional[Decimal] = None
+    other_fees: Optional[Decimal] = None
+    total_cost: Optional[Decimal] = None
+    purchase_date: Optional[date] = None
+    expected_handover: Optional[date] = None
+    actual_handover: Optional[date] = None
+    status: Optional[Literal['active', 'handed_over', 'cancelled']] = None
+    converted_property_id: Optional[UUID] = None
+    promotion_name: Optional[str] = None
+    amc_waiver_years: Optional[int] = None
+    dlp_waiver_years: Optional[int] = None
+    notes: Optional[str] = None
+
+class OffplanPropertyResponse(OffplanPropertyBase):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class OffplanPropertyWithDetails(OffplanPropertyResponse):
+    payments: List[OffplanPaymentResponse] = []
+    documents: List[OffplanDocumentResponse] = []
+
+
+# ============================================================================
+# OFF-PLAN DASHBOARD SCHEMAS
+# ============================================================================
+
+class UpcomingOffplanPayment(BaseModel):
+    id: UUID
+    property_id: UUID
+    developer: str
+    project_name: str
+    unit_number: str
+    milestone_name: str
+    amount: Decimal
+    due_date: date
+    status: str
+    days_until_due: int
+
+class UpcomingOffplanPaymentsResponse(BaseModel):
+    payments: List[UpcomingOffplanPayment]
+    total_amount: Decimal
+    count: int
+
+class OffplanInvestmentSummary(BaseModel):
+    total_properties: int
+    active_properties: int
+    handed_over_properties: int
+    total_investment: Decimal
+    total_paid: Decimal
+    total_pending: Decimal
+    total_overdue: Decimal

@@ -462,3 +462,128 @@ class DepositTransaction(Base):
     # Relationships
     tenancy = relationship("Tenancy", back_populates="deposit_transactions")
     journal_entry = relationship("JournalEntry")
+
+
+# ============================================================================
+# OFF-PLAN PROPERTY MODELS
+# ============================================================================
+
+class OffplanProperty(Base):
+    __tablename__ = "offplan_properties"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Developer and Project Info
+    developer = Column(String(255), nullable=False)
+    project_name = Column(String(255), nullable=False)
+    unit_number = Column(String(100), nullable=False)
+    reference_number = Column(String(100))
+
+    # Unit Details
+    unit_type = Column(String(100))  # apartment, villa, townhouse, etc.
+    unit_model = Column(String(100))
+    internal_area_sqm = Column(Numeric(10, 2))
+    balcony_area_sqm = Column(Numeric(10, 2))
+    total_area_sqm = Column(Numeric(10, 2))
+    floor_number = Column(Integer)
+    building_number = Column(String(50))
+    bedrooms = Column(Integer)
+    bathrooms = Column(Numeric(3, 1))
+    parking_spots = Column(Integer)
+
+    # Location
+    emirate = Column(PgEnum(
+        'abu_dhabi', 'dubai', 'sharjah', 'ajman',
+        'ras_al_khaimah', 'fujairah', 'umm_al_quwain',
+        name='emirate_type', create_type=False
+    ), nullable=False)
+    area = Column(String(255))
+    community = Column(String(255))
+
+    # Financial Details
+    base_price = Column(Numeric(14, 2), nullable=False)
+    land_dept_fee_percent = Column(Numeric(5, 2), default=4.00)
+    land_dept_fee = Column(Numeric(14, 2))
+    admin_fees = Column(Numeric(10, 2), default=0)
+    other_fees = Column(Numeric(10, 2), default=0)
+    total_cost = Column(Numeric(14, 2), nullable=False)
+
+    # Dates
+    purchase_date = Column(Date, nullable=False)
+    expected_handover = Column(Date)
+    actual_handover = Column(Date)
+
+    # Status
+    status = Column(PgEnum('active', 'handed_over', 'cancelled', name='offplan_status', create_type=False), default='active')
+
+    # Conversion to rental property
+    converted_property_id = Column(UUID(as_uuid=True), ForeignKey('properties.id'))
+
+    # Promotions
+    promotion_name = Column(String(255))
+    amc_waiver_years = Column(Integer, default=0)
+    dlp_waiver_years = Column(Integer, default=0)
+
+    # Additional
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+
+    # Relationships
+    payments = relationship("OffplanPayment", back_populates="property", cascade="all, delete-orphan")
+    documents = relationship("OffplanDocument", back_populates="property", cascade="all, delete-orphan")
+    converted_property = relationship("Property")
+
+
+class OffplanPayment(Base):
+    __tablename__ = "offplan_payments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    offplan_property_id = Column(UUID(as_uuid=True), ForeignKey('offplan_properties.id', ondelete='CASCADE'), nullable=False)
+
+    # Payment Schedule Details
+    installment_number = Column(Integer, nullable=False)
+    milestone_name = Column(String(255), nullable=False)
+    percentage = Column(Numeric(5, 2))
+    amount = Column(Numeric(14, 2), nullable=False)
+    due_date = Column(Date, nullable=False)
+
+    # Payment Status
+    status = Column(PgEnum('pending', 'paid', 'overdue', name='offplan_payment_status', create_type=False), default='pending')
+
+    # Payment Details
+    paid_date = Column(Date)
+    paid_amount = Column(Numeric(14, 2))
+    payment_method = Column(String(50))
+    payment_reference = Column(String(100))
+    receipt_url = Column(Text)
+    notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    property = relationship("OffplanProperty", back_populates="payments")
+
+
+class OffplanDocument(Base):
+    __tablename__ = "offplan_documents"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    offplan_property_id = Column(UUID(as_uuid=True), ForeignKey('offplan_properties.id', ondelete='CASCADE'), nullable=False)
+
+    # Document Details
+    document_type = Column(String(50), nullable=False)
+    document_name = Column(String(255), nullable=False)
+    file_data = Column(Text, nullable=False)  # Base64 encoded
+    file_size = Column(Integer)
+    mime_type = Column(String(100))
+
+    # Timestamps
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+    uploaded_by = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+
+    # Relationships
+    property = relationship("OffplanProperty", back_populates="documents")
