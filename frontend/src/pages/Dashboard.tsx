@@ -969,7 +969,7 @@ export default function Dashboard() {
       )}
 
       {/* Upcoming Off-Plan Payments */}
-      {upcomingOffplanPayments && upcomingOffplanPayments.payments.length > 0 && (
+      {upcomingOffplanPayments && (
         <div className="bg-white border border-stone-200 rounded-lg">
           <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
             <h2 className="text-sm font-medium text-stone-700">Upcoming Off-Plan Payments</h2>
@@ -977,44 +977,52 @@ export default function Dashboard() {
               View all <ChevronRight className="w-3 h-3" />
             </Link>
           </div>
-          <table className="w-full">
-            <thead>
-              <tr className="bg-stone-50 text-left">
-                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Project</th>
-                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Unit</th>
-                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Milestone</th>
-                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Amount</th>
-                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Due Date</th>
-                <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Days</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {upcomingOffplanPayments.payments.slice(0, 5).map((payment) => (
-                <tr key={payment.payment_id} className="hover:bg-stone-50">
-                  <td className="px-4 py-2.5 text-sm font-medium text-stone-900">{payment.project_name}</td>
-                  <td className="px-4 py-2.5 text-sm text-stone-600">{payment.unit_number}</td>
-                  <td className="px-4 py-2.5 text-sm text-stone-600">{payment.milestone_name}</td>
-                  <td className="px-4 py-2.5 text-sm font-medium text-stone-900 text-right tabular-nums">
-                    AED {formatAmount(payment.amount)}
-                  </td>
-                  <td className="px-4 py-2.5 text-sm text-stone-600 text-right">{formatDate(payment.due_date)}</td>
-                  <td className={`px-4 py-2.5 text-sm font-medium text-right ${getDaysColor(payment.days_until_due)}`}>
-                    {payment.days_until_due}d
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-stone-50 border-t border-stone-200">
-              <tr>
-                <td colSpan={3} className="px-4 py-2.5 text-sm font-medium text-stone-700">
-                  Total Due (30 days)
-                </td>
-                <td colSpan={3} className="px-4 py-2.5 text-sm font-semibold text-stone-900 text-right tabular-nums">
-                  AED {formatAmount(upcomingOffplanPayments.total_amount)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+          {upcomingOffplanPayments.payments.length > 0 ? (
+            <>
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-stone-50 text-left">
+                    <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Project</th>
+                    <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Unit</th>
+                    <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase">Milestone</th>
+                    <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Amount</th>
+                    <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Due Date</th>
+                    <th className="px-4 py-2 text-xs font-medium text-stone-500 uppercase text-right">Days</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {upcomingOffplanPayments.payments.slice(0, 5).map((payment) => (
+                    <tr key={payment.payment_id} className="hover:bg-stone-50">
+                      <td className="px-4 py-2.5 text-sm font-medium text-stone-900">{payment.project_name}</td>
+                      <td className="px-4 py-2.5 text-sm text-stone-600">{payment.unit_number}</td>
+                      <td className="px-4 py-2.5 text-sm text-stone-600">{payment.milestone_name}</td>
+                      <td className="px-4 py-2.5 text-sm font-medium text-stone-900 text-right tabular-nums">
+                        AED {formatAmount(payment.amount)}
+                      </td>
+                      <td className="px-4 py-2.5 text-sm text-stone-600 text-right">{formatDate(payment.due_date)}</td>
+                      <td className={`px-4 py-2.5 text-sm font-medium text-right ${getDaysColor(payment.days_until_due)}`}>
+                        {payment.days_until_due}d
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-stone-50 border-t border-stone-200">
+                  <tr>
+                    <td colSpan={3} className="px-4 py-2.5 text-sm font-medium text-stone-700">
+                      Total Due (30 days)
+                    </td>
+                    <td colSpan={3} className="px-4 py-2.5 text-sm font-semibold text-stone-900 text-right tabular-nums">
+                      AED {formatAmount(upcomingOffplanPayments.total_amount)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </>
+          ) : (
+            <div className="px-4 py-8 text-center text-sm text-stone-500">
+              No upcoming off-plan payments in the next 30 days
+            </div>
+          )}
         </div>
       )}
     </div>

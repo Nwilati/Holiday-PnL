@@ -10,7 +10,11 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  FileText,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { api } from '../api/client';
 import type { OffplanProperty, OffplanPropertyCreate, OffplanPayment, OffplanInvestmentSummary } from '../api/client';
 
@@ -93,6 +97,13 @@ export default function OffPlan() {
     payment_method: 'bank_transfer',
     payment_reference: '',
   });
+
+  // Document upload state
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadPropertyId, setUploadPropertyId] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState('');
+  const [documentName, setDocumentName] = useState('');
 
   useEffect(() => {
     loadProperties();
@@ -395,6 +406,180 @@ export default function OffPlan() {
     setExpandedPropertyId(expandedPropertyId === propertyId ? null : propertyId);
   };
 
+  const handleUploadDocument = (propertyId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setUploadPropertyId(propertyId);
+    setUploadFile(null);
+    setDocumentType('');
+    setDocumentName('');
+    setShowUploadModal(true);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setUploadFile(file);
+      setDocumentName(file.name);
+    }
+  };
+
+  const handleSubmitUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadPropertyId || !uploadFile) return;
+
+    try {
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        const base64Data = base64.split(',')[1]; // Remove data:mime;base64, prefix
+
+        await api.uploadOffplanDocument(uploadPropertyId!, {
+          document_type: documentType,
+          document_name: documentName,
+          file_data: base64Data,
+          file_size: uploadFile.size,
+          mime_type: uploadFile.type,
+        });
+
+        setShowUploadModal(false);
+        loadProperties();
+      };
+      reader.readAsDataURL(uploadFile);
+    } catch (error) {
+      console.error('Failed to upload document:', error);
+      alert('Failed to upload document. Please try again.');
+    }
+  };
+
+  const handleDownloadDocument = async (documentId: string, documentName: string) => {
+    try {
+      const response = await api.getOffplanDocument(documentId);
+      const { file_data, mime_type } = response.data;
+
+      // Convert base64 to blob
+      const byteCharacters = atob(file_data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: mime_type || 'application/octet-stream' });
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = documentName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download document:', error);
+      alert('Failed to download document. Please try again.');
+    }
+  };
+
+  const handleDeleteDocument = async (documentId: string) => {
+    if (!confirm('Are you sure you want to delete this document?')) return;
+
+    try {
+      await api.deleteOffplanDocument(documentId);
+      loadProperties();
+    } catch (error) {
+      console.error('Failed to delete document:', error);
+      alert('Failed to delete document. Please try again.');
+    }
+  };
+
+  const handleExportExcel = () => {
+    // Prepare data for Excel export
+    const exportData: any[] = [];
+
+    properties.forEach((property) => {
+      if (property.payments && property.payments.length > 0) {
+        property.payments.forEach((payment) => {
+          exportData.push({
+            Developer: property.developer,
+            Project: property.project_name,
+            Unit: property.unit_number,
+            Emirate: property.emirate.replace('_', ' '),
+            'Installment #': payment.installment_number,
+            Milestone: payment.milestone_name,
+            'Percentage %': payment.percentage,
+            'Amount AED': payment.amount,
+            'Due Date': payment.due_date || 'TBD',
+            Status: payment.status,
+            'Paid Date': payment.paid_date || '-',
+            'Paid Amount': payment.paid_amount || '-',
+          });
+        });
+      } else {
+        // Property without payments
+        exportData.push({
+          Developer: property.developer,
+          Project: property.project_name,
+          Unit: property.unit_number,
+          Emirate: property.emirate.replace('_', ' '),
+          'Installment #': '-',
+          Milestone: 'No payment schedule',
+          'Percentage %': '-',
+          'Amount AED': property.total_cost || 0,
+          'Due Date': '-',
+          Status: '-',
+          'Paid Date': '-',
+          'Paid Amount': '-',
+        });
+      }
+    });
+
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Payment Schedule');
+
+    // Download file
+    XLSX.writeFile(wb, `OffPlan_Payment_Schedule_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const handleExportSummary = () => {
+    // Export investment summary
+    const summaryData = [{
+      'Total Properties': summary?.total_properties || 0,
+      'Total Investment AED': summary?.total_investment || 0,
+      'Total Paid AED': summary?.total_paid || 0,
+      'Remaining AED': (summary?.total_investment || 0) - (summary?.total_paid || 0),
+      'Paid Percentage': summary?.total_investment ? ((summary.total_paid / summary.total_investment) * 100).toFixed(2) + '%' : '0%',
+    }];
+
+    // Property breakdown
+    const propertyData = properties.map((property) => ({
+      Developer: property.developer,
+      Project: property.project_name,
+      Unit: property.unit_number,
+      Emirate: property.emirate.replace('_', ' '),
+      'Total Cost AED': property.total_cost || 0,
+      'Total Paid AED': property.payments?.filter(p => p.status === 'paid').reduce((sum, p) => sum + (p.paid_amount || p.amount), 0) || 0,
+      'Remaining AED': (property.total_cost || 0) - (property.payments?.filter(p => p.status === 'paid').reduce((sum, p) => sum + (p.paid_amount || p.amount), 0) || 0),
+      Status: property.status,
+      'Purchase Date': property.purchase_date || '-',
+      'Expected Handover': property.expected_handover || '-',
+    }));
+
+    const wb = XLSX.utils.book_new();
+
+    // Add summary sheet
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+    // Add properties sheet
+    const wsProperties = XLSX.utils.json_to_sheet(propertyData);
+    XLSX.utils.book_append_sheet(wb, wsProperties, 'Properties');
+
+    XLSX.writeFile(wb, `OffPlan_Investment_Summary_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const getPaidPercentage = (property: OffplanProperty) => {
     if (!property.payments || property.payments.length === 0) return 0;
     const totalAmount = property.payments.reduce((sum, p) => sum + p.amount, 0);
@@ -420,13 +605,40 @@ export default function OffPlan() {
           <h1 className="text-2xl font-semibold text-stone-900">Off-Plan Properties</h1>
           <p className="mt-1 text-sm text-stone-500">Manage your off-plan property investments</p>
         </div>
-        <button
-          onClick={handleCreateProperty}
-          className="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 flex items-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          Add Property
-        </button>
+        <div className="flex gap-2">
+          <div className="relative group">
+            <button
+              className="px-4 py-2 bg-stone-100 text-stone-700 rounded-lg hover:bg-stone-200 flex items-center gap-2"
+            >
+              <FileSpreadsheet className="w-5 h-5" />
+              Export
+              <ChevronDown className="w-4 h-4" />
+            </button>
+            <div className="absolute right-0 mt-1 w-56 bg-white rounded-lg shadow-lg border border-stone-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+              <button
+                onClick={handleExportExcel}
+                className="w-full px-4 py-2 text-left text-sm text-stone-700 hover:bg-stone-50 rounded-t-lg flex items-center gap-2"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Payment Schedule (Excel)
+              </button>
+              <button
+                onClick={handleExportSummary}
+                className="w-full px-4 py-2 text-left text-sm text-stone-700 hover:bg-stone-50 rounded-b-lg flex items-center gap-2"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Investment Summary (Excel)
+              </button>
+            </div>
+          </div>
+          <button
+            onClick={handleCreateProperty}
+            className="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 flex items-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            Add Property
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -594,54 +806,119 @@ export default function OffPlan() {
                         </td>
                       </tr>
 
-                      {/* Expanded Payment Schedule */}
-                      {isExpanded && property.payments && property.payments.length > 0 && (
+                      {/* Expanded Payment Schedule and Documents */}
+                      {isExpanded && (
                         <tr>
                           <td colSpan={8} className="px-4 py-4 bg-stone-50">
-                            <div className="space-y-2">
-                              <h4 className="text-sm font-medium text-stone-900 mb-3">Payment Schedule</h4>
-                              <div className="grid grid-cols-1 gap-2">
-                                {property.payments.map((payment) => (
-                                  <div
-                                    key={payment.id}
-                                    className="flex items-center justify-between bg-white p-3 rounded-lg border border-stone-200"
-                                  >
-                                    <div className="flex items-center gap-4">
-                                      <div className="text-sm">
-                                        <span className="font-medium text-stone-900">
-                                          #{payment.installment_number}
-                                        </span>
-                                        <span className="text-stone-500 ml-2">{payment.milestone_name}</span>
-                                      </div>
-                                      <div className="text-sm text-stone-600">
-                                        <Calendar className="w-4 h-4 inline mr-1" />
-                                        {formatDate(payment.due_date)}
-                                      </div>
-                                      <div className="text-sm font-medium text-stone-900">
-                                        AED {formatCurrency(payment.amount)}
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded ${getStatusColor(payment.status)}`}>
-                                        {payment.status}
-                                      </span>
-                                      {payment.status === 'pending' && (
-                                        <button
-                                          onClick={(e) => handleMarkPaymentPaid(payment, e)}
-                                          className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 flex items-center gap-1"
-                                        >
-                                          <Check className="w-3 h-3" />
-                                          Mark Paid
-                                        </button>
-                                      )}
-                                      {payment.status === 'paid' && payment.paid_date && (
-                                        <div className="text-xs text-stone-500">
-                                          Paid: {formatDate(payment.paid_date)}
+                            <div className="space-y-4">
+                              {/* Payment Schedule Section */}
+                              <div>
+                                <div className="flex justify-between items-center mb-3">
+                                  <h4 className="text-sm font-medium text-stone-900">Payment Schedule</h4>
+                                </div>
+                                {property.payments && property.payments.length > 0 ? (
+                                  <div className="grid grid-cols-1 gap-2">
+                                    {property.payments.map((payment) => (
+                                      <div
+                                        key={payment.id}
+                                        className="flex items-center justify-between bg-white p-3 rounded-lg border border-stone-200"
+                                      >
+                                        <div className="flex items-center gap-4">
+                                          <div className="text-sm">
+                                            <span className="font-medium text-stone-900">
+                                              #{payment.installment_number}
+                                            </span>
+                                            <span className="text-stone-500 ml-2">{payment.milestone_name}</span>
+                                          </div>
+                                          <div className="text-sm text-stone-600">
+                                            <span className="text-stone-400 mr-1">{payment.percentage}%</span>
+                                          </div>
+                                          <div className="text-sm text-stone-600">
+                                            <Calendar className="w-4 h-4 inline mr-1" />
+                                            {formatDate(payment.due_date)}
+                                          </div>
+                                          <div className="text-sm font-medium text-stone-900">
+                                            AED {formatCurrency(payment.amount)}
+                                          </div>
                                         </div>
-                                      )}
-                                    </div>
+                                        <div className="flex items-center gap-3">
+                                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded ${getStatusColor(payment.status)}`}>
+                                            {payment.status}
+                                          </span>
+                                          {payment.status === 'pending' && (
+                                            <button
+                                              onClick={(e) => handleMarkPaymentPaid(payment, e)}
+                                              className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 flex items-center gap-1"
+                                            >
+                                              <Check className="w-3 h-3" />
+                                              Mark Paid
+                                            </button>
+                                          )}
+                                          {payment.status === 'paid' && payment.paid_date && (
+                                            <div className="text-xs text-stone-500">
+                                              Paid: {formatDate(payment.paid_date)}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
-                                ))}
+                                ) : (
+                                  <div className="text-sm text-stone-500 bg-white p-3 rounded-lg border border-stone-200">
+                                    No payment schedule added
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Documents Section */}
+                              <div>
+                                <div className="flex justify-between items-center mb-3">
+                                  <h4 className="text-sm font-medium text-stone-900">Documents</h4>
+                                  <button
+                                    onClick={(e) => handleUploadDocument(property.id, e)}
+                                    className="px-3 py-1.5 text-xs bg-sky-600 text-white rounded-lg hover:bg-sky-700 flex items-center gap-1"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    Upload
+                                  </button>
+                                </div>
+                                {property.documents && property.documents.length > 0 ? (
+                                  <div className="grid grid-cols-1 gap-2">
+                                    {property.documents.map((doc) => (
+                                      <div
+                                        key={doc.id}
+                                        className="flex items-center justify-between bg-white p-3 rounded-lg border border-stone-200"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <FileText className="w-4 h-4 text-stone-400" />
+                                          <div>
+                                            <div className="text-sm font-medium text-stone-900">{doc.document_name}</div>
+                                            <div className="text-xs text-stone-500 capitalize">{doc.document_type.replace('_', ' ')}</div>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={() => handleDownloadDocument(doc.id, doc.document_name)}
+                                            className="p-1.5 text-stone-400 hover:text-sky-600"
+                                            title="Download"
+                                          >
+                                            <Download className="w-4 h-4" />
+                                          </button>                                          <button
+                                            onClick={() => handleDeleteDocument(doc.id)}
+                                            className="p-1.5 text-stone-400 hover:text-red-600"
+                                            title="Delete"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-sm text-stone-500 bg-white p-3 rounded-lg border border-stone-200">
+                                    No documents uploaded
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -1069,6 +1346,89 @@ export default function OffPlan() {
                 Delete
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Document Modal */}
+      {showUploadModal && uploadPropertyId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold text-stone-900">Upload Document</h3>
+              <button
+                onClick={() => setShowUploadModal(false)}
+                className="text-stone-400 hover:text-stone-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitUpload} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-2">
+                  Document Type *
+                </label>
+                <select
+                  required
+                  value={documentType}
+                  onChange={(e) => setDocumentType(e.target.value)}
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                >
+                  <option value="">Select type...</option>
+                  <option value="spa">SPA</option>
+                  <option value="offer_letter">Offer Letter</option>
+                  <option value="payment_receipt">Payment Receipt</option>
+                  <option value="oqood">Oqood</option>
+                  <option value="noc">NOC</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-2">
+                  Document Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={documentName}
+                  onChange={(e) => setDocumentName(e.target.value)}
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                  placeholder="Enter document name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-2">
+                  File *
+                </label>
+                <input
+                  type="file"
+                  required
+                  onChange={handleFileChange}
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                  className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                />
+                <p className="text-xs text-stone-500 mt-1">PDF, images, or Word documents</p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-stone-200">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadModal(false)}
+                  className="px-4 py-2 border border-stone-300 text-stone-700 rounded-lg hover:bg-stone-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700"
+                >
+                  Upload
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
