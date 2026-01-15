@@ -24,6 +24,7 @@ const navigation = [
   { name: 'Calendar', href: '/calendar', icon: Calendar },
   { name: 'Bookings', href: '/bookings', icon: CalendarDays },
   { name: 'Tenancies', href: '/tenancies', icon: FileText },
+  { name: 'Off-Plan', href: '/offplan', icon: Building2 },
   { name: 'Expenses', href: '/expenses', icon: Receipt },
   { name: 'Accounting', href: '/accounting', icon: BookOpen },
   { name: 'Tax Reports', href: '/tax-reports', icon: Landmark },

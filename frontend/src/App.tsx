@@ -9,6 +9,7 @@ import Calendar from './pages/Calendar';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Tenancies from './pages/Tenancies';
+import OffPlan from './pages/OffPlan';
 import Accounting from './pages/Accounting';
 import TaxReports from './pages/TaxReports';
 import Login from './pages/Login';
@@ -101,6 +102,13 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <Tenancies />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/offplan" element={
+        <ProtectedRoute>
+          <Layout>
+            <OffPlan />
           </Layout>
         </ProtectedRoute>
       } />

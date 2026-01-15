@@ -326,6 +326,62 @@ const api = {
 
   deleteDocument: (documentId: string) =>
     axiosInstance.delete(`/tenancies/documents/${documentId}`),
+
+  // ============================================================================
+  // OFF-PLAN API METHODS
+  // ============================================================================
+
+  // Off-Plan Properties
+  getOffplanProperties: (params?: { status?: string; emirate?: string; developer?: string }) =>
+    axiosInstance.get<OffplanProperty[]>('/offplan/properties', { params }),
+
+  getOffplanProperty: (id: string) =>
+    axiosInstance.get<OffplanProperty>(`/offplan/properties/${id}`),
+
+  createOffplanProperty: (data: OffplanPropertyCreate) =>
+    axiosInstance.post<OffplanProperty>('/offplan/properties', data),
+
+  updateOffplanProperty: (id: string, data: Partial<OffplanPropertyCreate>) =>
+    axiosInstance.put<OffplanProperty>(`/offplan/properties/${id}`, data),
+
+  deleteOffplanProperty: (id: string) =>
+    axiosInstance.delete(`/offplan/properties/${id}`),
+
+  // Off-Plan Payments
+  getOffplanPayments: (propertyId: string) =>
+    axiosInstance.get<OffplanPayment[]>(`/offplan/properties/${propertyId}/payments`),
+
+  addOffplanPayment: (propertyId: string, data: OffplanPaymentCreate) =>
+    axiosInstance.post<OffplanPayment>(`/offplan/properties/${propertyId}/payments`, data),
+
+  updateOffplanPayment: (paymentId: string, data: Partial<OffplanPayment>) =>
+    axiosInstance.put<OffplanPayment>(`/offplan/payments/${paymentId}`, data),
+
+  deleteOffplanPayment: (paymentId: string) =>
+    axiosInstance.delete(`/offplan/payments/${paymentId}`),
+
+  markOffplanPaymentPaid: (paymentId: string, params: { paid_date: string; paid_amount: number; payment_method?: string; payment_reference?: string }) =>
+    axiosInstance.post<OffplanPayment>(`/offplan/payments/${paymentId}/mark-paid`, null, { params }),
+
+  // Off-Plan Documents
+  getOffplanDocuments: (propertyId: string) =>
+    axiosInstance.get<OffplanDocument[]>(`/offplan/properties/${propertyId}/documents`),
+
+  uploadOffplanDocument: (propertyId: string, data: { document_type: string; document_name: string; file_data: string; file_size?: number; mime_type?: string }) =>
+    axiosInstance.post<OffplanDocument>(`/offplan/properties/${propertyId}/documents`, data),
+
+  getOffplanDocument: (documentId: string) =>
+    axiosInstance.get<OffplanDocument & { file_data: string }>(`/offplan/documents/${documentId}`),
+
+  deleteOffplanDocument: (documentId: string) =>
+    axiosInstance.delete(`/offplan/documents/${documentId}`),
+
+  // Off-Plan Dashboard
+  getUpcomingOffplanPayments: (params?: { days?: number }) =>
+    axiosInstance.get<UpcomingOffplanPaymentsResponse>('/offplan/dashboard/upcoming-payments', { params }),
+
+  getOffplanInvestmentSummary: () =>
+    axiosInstance.get<OffplanInvestmentSummary>('/offplan/dashboard/summary'),
 };
 
 export interface AnnualRevenueResponse {
@@ -333,6 +389,157 @@ export interface AnnualRevenueResponse {
   total_pending: number;
   total_contract_value: number;
   active_tenancies: number;
+}
+
+// ============================================================================
+// OFF-PLAN PROPERTY TYPES
+// ============================================================================
+
+export interface OffplanPayment {
+  id: string;
+  offplan_property_id: string;
+  installment_number: number;
+  milestone_name: string;
+  percentage: number;
+  amount: number;
+  due_date?: string;
+  status: 'pending' | 'paid' | 'overdue';
+  paid_date?: string;
+  paid_amount?: number;
+  payment_method?: string;
+  payment_reference?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OffplanDocument {
+  id: string;
+  offplan_property_id: string;
+  document_type: string;
+  document_name: string;
+  file_size?: number;
+  mime_type?: string;
+  uploaded_at: string;
+}
+
+export interface OffplanProperty {
+  id: string;
+  developer: string;
+  project_name: string;
+  unit_number: string;
+  reference_number?: string;
+  unit_type?: string;
+  unit_model?: string;
+  internal_area_sqm?: number;
+  balcony_area_sqm?: number;
+  total_area_sqm?: number;
+  floor_number?: number;
+  building_number?: string;
+  bedrooms: number;
+  bathrooms?: number;
+  parking_spots: number;
+  emirate: 'abu_dhabi' | 'dubai' | 'sharjah' | 'ajman' | 'ras_al_khaimah' | 'fujairah' | 'umm_al_quwain';
+  area?: string;
+  community?: string;
+  base_price: number;
+  land_dept_fee_percent?: number;
+  land_dept_fee?: number;
+  admin_fees: number;
+  other_fees: number;
+  total_cost?: number;
+  purchase_date?: string;
+  expected_handover?: string;
+  actual_handover?: string;
+  status: 'active' | 'handed_over' | 'cancelled';
+  converted_property_id?: string;
+  promotion_name?: string;
+  amc_waiver_years?: number;
+  dlp_waiver_years?: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  payments?: OffplanPayment[];
+  documents?: OffplanDocument[];
+  total_paid?: number;
+  remaining?: number;
+  paid_percentage?: number;
+  next_payment_date?: string;
+  next_payment_amount?: number;
+}
+
+export interface OffplanPaymentCreate {
+  installment_number: number;
+  milestone_name: string;
+  percentage: number;
+  amount: number;
+  due_date?: string;
+}
+
+export interface OffplanPropertyCreate {
+  developer: string;
+  project_name: string;
+  unit_number: string;
+  reference_number?: string;
+  unit_type?: string;
+  unit_model?: string;
+  internal_area_sqm?: number;
+  balcony_area_sqm?: number;
+  total_area_sqm?: number;
+  floor_number?: number;
+  building_number?: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  parking_spots?: number;
+  emirate: 'abu_dhabi' | 'dubai' | 'sharjah' | 'ajman' | 'ras_al_khaimah' | 'fujairah' | 'umm_al_quwain';
+  area?: string;
+  community?: string;
+  base_price: number;
+  land_dept_fee_percent?: number;
+  admin_fees?: number;
+  other_fees?: number;
+  purchase_date?: string;
+  expected_handover?: string;
+  promotion_name?: string;
+  amc_waiver_years?: number;
+  dlp_waiver_years?: number;
+  notes?: string;
+  payments?: OffplanPaymentCreate[];
+}
+
+export interface UpcomingOffplanPayment {
+  payment_id: string;
+  property_id: string;
+  developer: string;
+  project_name: string;
+  unit_number: string;
+  emirate: string;
+  installment_number: number;
+  milestone_name: string;
+  percentage: number;
+  amount: number;
+  due_date: string;
+  days_until_due: number;
+  status: string;
+}
+
+export interface UpcomingOffplanPaymentsResponse {
+  payments: UpcomingOffplanPayment[];
+  total_amount: number;
+  count: number;
+}
+
+export interface OffplanInvestmentSummary {
+  total_properties: number;
+  total_investment: number;
+  total_paid: number;
+  total_remaining: number;
+  overall_paid_percentage: number;
+  pending_payments_count: number;
+  overdue_payments_count: number;
+  payments_due_30_days: number;
+  by_emirate: Record<string, { count: number; value: number }>;
+  by_developer: Record<string, { count: number; value: number }>;
 }
 
 export { api };
