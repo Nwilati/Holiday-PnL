@@ -270,6 +270,7 @@ class ExpenseCreate(ExpenseBase):
     pass
 
 class ExpenseUpdate(BaseModel):
+    property_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     expense_date: Optional[date] = None
     vendor: Optional[str] = None
