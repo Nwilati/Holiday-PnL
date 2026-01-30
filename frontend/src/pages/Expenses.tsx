@@ -282,9 +282,12 @@ export default function Expenses() {
           properties={properties}
           categories={categories}
           onClose={() => setShowForm(false)}
-          onSave={() => {
+          onSave={async () => {
+            console.log('Expense saved, refreshing list...');
             setShowForm(false);
-            loadData();
+            setSelectedExpense(null);
+            await loadData();
+            console.log('Expense list refreshed');
           }}
         />
       )}
@@ -465,7 +468,7 @@ interface ExpenseFormProps {
   properties: Property[];
   categories: Category[];
   onClose: () => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
 }
 
 function ExpenseForm({ expense, properties, categories, onClose, onSave }: ExpenseFormProps) {
@@ -609,7 +612,8 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
         }
       }
 
-      onSave();
+      // Call onSave to close modal and refresh list
+      await onSave();
     } catch (error: any) {
       console.error('Error saving expense:', error);
       console.error('Error response:', error.response?.data);
