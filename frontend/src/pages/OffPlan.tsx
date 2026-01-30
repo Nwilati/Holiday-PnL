@@ -855,11 +855,45 @@ export default function OffPlan() {
                         </td>
                       </tr>
 
-                      {/* Expanded Payment Schedule and Documents */}
+                      {/* Expanded Cost Breakdown, Payment Schedule and Documents */}
                       {isExpanded && (
                         <tr>
                           <td colSpan={8} className="px-4 py-4 bg-stone-50">
                             <div className="space-y-4">
+                              {/* Cost Breakdown Section */}
+                              <div className="bg-white rounded-lg p-4 border border-stone-200">
+                                <h4 className="font-semibold text-stone-900 mb-3">Cost Breakdown</h4>
+                                <div className="space-y-2">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-stone-600">Base Price</span>
+                                    <span className="font-medium text-stone-900">AED {(property.base_price || 0).toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-stone-600">Land Dept Fee ({property.land_dept_fee_percent || 4}%)</span>
+                                    <span className="font-medium text-stone-900">AED {(property.land_dept_fee || 0).toLocaleString()}</span>
+                                  </div>
+                                  {(property.admin_fees || 0) > 0 && (
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-stone-600">Admin Fees</span>
+                                      <span className="font-medium text-stone-900">AED {(property.admin_fees || 0).toLocaleString()}</span>
+                                    </div>
+                                  )}
+                                  {(property.other_fees || 0) > 0 && (
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-stone-600">Other Fees</span>
+                                      <span className="font-medium text-stone-900">AED {(property.other_fees || 0).toLocaleString()}</span>
+                                    </div>
+                                  )}
+                                  <div className="border-t border-stone-200 pt-2 mt-2">
+                                    <div className="flex justify-between items-center">
+                                      <span className="font-semibold text-stone-900">Total Cost</span>
+                                      <span className="font-bold text-lg text-sky-600">AED {(property.total_cost || 0).toLocaleString()}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <p className="text-xs text-stone-500 mt-3">* Land Dept Fee and Admin Fees are typically paid at booking/SPA signing</p>
+                              </div>
+
                               {/* Payment Schedule Section */}
                               <div>
                                 <div className="flex justify-between items-center mb-3">
