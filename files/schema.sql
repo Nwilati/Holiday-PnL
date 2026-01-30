@@ -1,8 +1,8 @@
 -- ============================================================================
 -- HOLIDAY HOME P&L MANAGEMENT SYSTEM - DATABASE SCHEMA
--- Version: 1.0.0
--- Created: 2025-12-15
--- Database: PostgreSQL 15+
+-- Version: 2.0.0
+-- Updated: January 16, 2026
+-- Database: PostgreSQL 15+ (Neon)
 -- ============================================================================
 
 -- Enable required extensions
@@ -32,6 +32,7 @@ CREATE TYPE payment_method AS ENUM (
     'bank_transfer',
     'online_payment',
     'platform_payout',
+    'cheque',
     'other'
 );
 
@@ -61,6 +62,49 @@ CREATE TYPE user_role AS ENUM (
     'viewer'
 );
 
+-- Tenancy status
+CREATE TYPE tenancy_status AS ENUM (
+    'active',
+    'expired',
+    'terminated',
+    'renewed'
+);
+
+-- Cheque status
+CREATE TYPE cheque_status AS ENUM (
+    'pending',
+    'deposited',
+    'cleared',
+    'bounced',
+    'cancelled',
+    'replaced'
+);
+
+-- UAE Emirates
+CREATE TYPE emirate AS ENUM (
+    'abu_dhabi',
+    'dubai',
+    'sharjah',
+    'ajman',
+    'ras_al_khaimah',
+    'fujairah',
+    'umm_al_quwain'
+);
+
+-- Off-plan property status
+CREATE TYPE offplan_status AS ENUM (
+    'active',
+    'handed_over',
+    'cancelled'
+);
+
+-- Off-plan payment status
+CREATE TYPE offplan_payment_status AS ENUM (
+    'pending',
+    'paid',
+    'overdue'
+);
+
 -- ============================================================================
 -- CORE TABLES
 -- ============================================================================
@@ -88,10 +132,10 @@ CREATE TABLE properties (
     
     -- Basic Info
     name VARCHAR(255) NOT NULL,
-    property_type VARCHAR(100), -- apartment, villa, studio, etc.
+    property_type VARCHAR(100),
     address_line1 VARCHAR(255),
     address_line2 VARCHAR(255),
-    area VARCHAR(100), -- Dubai Marina, Downtown, etc.
+    area VARCHAR(100),
     city VARCHAR(100) DEFAULT 'Dubai',
     country VARCHAR(100) DEFAULT 'UAE',
     
@@ -109,9 +153,9 @@ CREATE TABLE properties (
     -- Financial Settings
     currency CHAR(3) DEFAULT 'AED',
     vat_registered BOOLEAN DEFAULT TRUE,
-    vat_rate DECIMAL(5,2) DEFAULT 5.00, -- UAE VAT is 5%
+    vat_rate DECIMAL(5,2) DEFAULT 5.00,
     timezone VARCHAR(50) DEFAULT 'Asia/Dubai',
-    fiscal_year_start INTEGER DEFAULT 1, -- Month (1 = January)
+    fiscal_year_start INTEGER DEFAULT 1,
     
     -- Status
     is_active BOOLEAN DEFAULT TRUE,
@@ -125,21 +169,15 @@ CREATE TABLE properties (
 -- ----------------------------------------------------------------------------
 CREATE TABLE channels (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    code VARCHAR(50) UNIQUE NOT NULL, -- 'airbnb', 'booking', 'direct', etc.
+    code VARCHAR(50) UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
-    
-    -- Fee Structure
-    commission_rate DECIMAL(5,2), -- Platform commission %
-    payment_processing_rate DECIMAL(5,2), -- Payment processing %
+    commission_rate DECIMAL(5,2),
+    payment_processing_rate DECIMAL(5,2),
     flat_fee_per_booking DECIMAL(10,2) DEFAULT 0,
-    
-    -- Integration (future use)
     api_enabled BOOLEAN DEFAULT FALSE,
     ical_url TEXT,
-    
-    -- Settings
     is_active BOOLEAN DEFAULT TRUE,
-    color_hex VARCHAR(7) DEFAULT '#6B7280', -- For charts
+    color_hex VARCHAR(7) DEFAULT '#6B7280',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -150,527 +188,442 @@ INSERT INTO channels (code, name, commission_rate, payment_processing_rate, colo
     ('booking', 'Booking.com', 15.00, 0.00, '#003580'),
     ('direct', 'Direct Booking', 0.00, 2.90, '#10B981'),
     ('vrbo', 'VRBO', 5.00, 0.00, '#3B5998'),
+    ('expedia', 'Expedia', 15.00, 0.00, '#FFD700'),
+    ('agoda', 'Agoda', 15.00, 0.00, '#5C2D91'),
     ('other', 'Other', 0.00, 0.00, '#6B7280');
 
 -- ----------------------------------------------------------------------------
--- EXPENSE CATEGORIES (Chart of Accounts)
+-- EXPENSE CATEGORIES
 -- ----------------------------------------------------------------------------
 CREATE TABLE expense_categories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     code VARCHAR(20) UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
-    parent_code VARCHAR(20), -- For hierarchy
-    
-    -- Classification
-    category_type VARCHAR(50), -- revenue, operating_expense, capital, other
+    parent_code VARCHAR(20),
+    category_type VARCHAR(50),
     cost_type cost_type DEFAULT 'variable',
     is_vat_applicable BOOLEAN DEFAULT TRUE,
-    
-    -- Display
     display_order INTEGER DEFAULT 0,
     is_active BOOLEAN DEFAULT TRUE,
-    
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Insert Chart of Accounts (UAE Holiday Home focused)
+-- Insert default categories (abbreviated)
 INSERT INTO expense_categories (code, name, parent_code, category_type, cost_type, is_vat_applicable, display_order) VALUES
-    -- Revenue Categories
-    ('4000', 'Revenue', NULL, 'revenue', 'variable', FALSE, 100),
-    ('4100', 'Accommodation Revenue', '4000', 'revenue', 'variable', FALSE, 110),
-    ('4101', 'Nightly Rate Revenue', '4100', 'revenue', 'variable', FALSE, 111),
-    ('4102', 'Cleaning Fees Collected', '4100', 'revenue', 'variable', FALSE, 112),
-    ('4103', 'Extra Guest Fees', '4100', 'revenue', 'variable', FALSE, 113),
-    ('4104', 'Late Checkout Fees', '4100', 'revenue', 'variable', FALSE, 114),
-    ('4105', 'Other Service Fees', '4100', 'revenue', 'variable', FALSE, 115),
-    
-    -- Pass-through (collected and remitted)
-    ('4200', 'Taxes/Fees Collected', '4000', 'revenue', 'variable', FALSE, 120),
-    ('4201', 'Tourism Dirham Collected', '4200', 'revenue', 'variable', FALSE, 121),
-    ('4202', 'Municipality Fee Collected', '4200', 'revenue', 'variable', FALSE, 122),
-    ('4203', 'VAT Collected', '4200', 'revenue', 'variable', FALSE, 123),
-    
-    -- Operating Expenses
     ('5000', 'Operating Expenses', NULL, 'operating_expense', 'variable', TRUE, 200),
-    
-    -- Platform & Payment Fees
     ('5100', 'Platform & Payment Fees', '5000', 'operating_expense', 'variable', FALSE, 210),
-    ('5101', 'Airbnb Commission', '5100', 'operating_expense', 'variable', FALSE, 211),
-    ('5102', 'Booking.com Commission', '5100', 'operating_expense', 'variable', FALSE, 212),
-    ('5103', 'Payment Processing Fees', '5100', 'operating_expense', 'variable', FALSE, 213),
-    ('5104', 'Channel Manager Fees', '5100', 'operating_expense', 'fixed', TRUE, 214),
-    
-    -- Utilities
     ('5200', 'Utilities', '5000', 'operating_expense', 'variable', TRUE, 220),
-    ('5201', 'DEWA (Electric & Water)', '5200', 'operating_expense', 'variable', TRUE, 221),
-    ('5202', 'District Cooling', '5200', 'operating_expense', 'variable', TRUE, 222),
-    ('5203', 'Internet/WiFi', '5200', 'operating_expense', 'fixed', TRUE, 223),
-    ('5204', 'Gas', '5200', 'operating_expense', 'variable', TRUE, 224),
-    
-    -- Cleaning & Laundry
     ('5300', 'Cleaning & Laundry', '5000', 'operating_expense', 'variable', TRUE, 230),
-    ('5301', 'Turnover Cleaning', '5300', 'operating_expense', 'variable', TRUE, 231),
-    ('5302', 'Deep Cleaning', '5300', 'operating_expense', 'variable', TRUE, 232),
-    ('5303', 'Laundry Service', '5300', 'operating_expense', 'variable', TRUE, 233),
-    ('5304', 'Cleaning Supplies', '5300', 'operating_expense', 'variable', TRUE, 234),
-    
-    -- Supplies & Amenities
-    ('5400', 'Supplies & Amenities', '5000', 'operating_expense', 'variable', TRUE, 240),
-    ('5401', 'Toiletries', '5400', 'operating_expense', 'variable', TRUE, 241),
-    ('5402', 'Kitchen Supplies', '5400', 'operating_expense', 'variable', TRUE, 242),
-    ('5403', 'Linens & Towels', '5400', 'operating_expense', 'variable', TRUE, 243),
-    ('5404', 'Guest Amenities', '5400', 'operating_expense', 'variable', TRUE, 244),
-    
-    -- Maintenance & Repairs
-    ('5500', 'Maintenance & Repairs', '5000', 'operating_expense', 'variable', TRUE, 250),
-    ('5501', 'AC Service/Repair', '5500', 'operating_expense', 'variable', TRUE, 251),
-    ('5502', 'Plumbing', '5500', 'operating_expense', 'variable', TRUE, 252),
-    ('5503', 'Electrical', '5500', 'operating_expense', 'variable', TRUE, 253),
-    ('5504', 'Appliance Repair', '5500', 'operating_expense', 'variable', TRUE, 254),
-    ('5505', 'General Handyman', '5500', 'operating_expense', 'variable', TRUE, 255),
-    ('5506', 'Pest Control', '5500', 'operating_expense', 'variable', TRUE, 256),
-    
-    -- Property Costs
-    ('5600', 'Property Costs', '5000', 'operating_expense', 'fixed', TRUE, 260),
-    ('5601', 'Service Charges (HOA)', '5600', 'operating_expense', 'fixed', TRUE, 261),
-    ('5602', 'Insurance', '5600', 'operating_expense', 'fixed', TRUE, 262),
-    ('5603', 'DTCM License/Permit', '5600', 'operating_expense', 'fixed', TRUE, 263),
-    ('5604', 'Ejari Fee', '5600', 'operating_expense', 'fixed', TRUE, 264),
-    
-    -- Management
-    ('5700', 'Management', '5000', 'operating_expense', 'variable', TRUE, 270),
-    ('5701', 'Property Manager Fee', '5700', 'operating_expense', 'variable', TRUE, 271),
-    ('5702', 'Co-host Fee', '5700', 'operating_expense', 'variable', TRUE, 272),
-    ('5703', 'Virtual Assistant', '5700', 'operating_expense', 'fixed', TRUE, 273),
-    
-    -- Marketing
-    ('5800', 'Marketing', '5000', 'operating_expense', 'variable', TRUE, 280),
-    ('5801', 'Photography', '5800', 'operating_expense', 'one_time', TRUE, 281),
-    ('5802', 'Listing Optimization', '5800', 'operating_expense', 'one_time', TRUE, 282),
-    ('5803', 'Direct Booking Marketing', '5800', 'operating_expense', 'variable', TRUE, 283),
-    
-    -- Other Operating
-    ('6000', 'Other Expenses', NULL, 'operating_expense', 'variable', TRUE, 300),
-    ('6100', 'Bank Charges', '6000', 'operating_expense', 'variable', FALSE, 310),
-    ('6200', 'Professional Fees', '6000', 'operating_expense', 'variable', TRUE, 320),
-    ('6300', 'Miscellaneous', '6000', 'operating_expense', 'variable', TRUE, 330),
-    
-    -- Capital Expenditure
-    ('7000', 'Capital Expenditure', NULL, 'capital', 'capital', TRUE, 400),
-    ('7100', 'Furniture', '7000', 'capital', 'capital', TRUE, 410),
-    ('7200', 'Appliances', '7000', 'capital', 'capital', TRUE, 420),
-    ('7300', 'Electronics', '7000', 'capital', 'capital', TRUE, 430),
-    ('7400', 'Renovations', '7000', 'capital', 'capital', TRUE, 440);
+    ('5400', 'Maintenance & Repairs', '5000', 'operating_expense', 'variable', TRUE, 240),
+    ('5500', 'Property Management', '5000', 'operating_expense', 'fixed', TRUE, 250),
+    ('5600', 'Insurance', '5000', 'operating_expense', 'fixed', TRUE, 260),
+    ('5700', 'Marketing', '5000', 'operating_expense', 'variable', TRUE, 270),
+    ('5800', 'Guest Supplies', '5000', 'operating_expense', 'variable', TRUE, 280),
+    ('5900', 'Administrative', '5000', 'operating_expense', 'fixed', TRUE, 290),
+    ('6000', 'Taxes & Fees', NULL, 'operating_expense', 'fixed', FALSE, 300);
 
 -- ----------------------------------------------------------------------------
--- BOOKINGS (Main Revenue Ledger)
+-- BOOKINGS
 -- ----------------------------------------------------------------------------
 CREATE TABLE bookings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    property_id UUID NOT NULL REFERENCES properties(id),
-    channel_id UUID NOT NULL REFERENCES channels(id),
-    
-    -- Booking Identification
-    booking_ref VARCHAR(100), -- Platform's booking ID
-    confirmation_code VARCHAR(50),
+    property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+    channel_id UUID REFERENCES channels(id),
     
     -- Guest Info
-    guest_name VARCHAR(255),
+    guest_name VARCHAR(255) NOT NULL,
     guest_email VARCHAR(255),
     guest_phone VARCHAR(50),
-    guest_count INTEGER DEFAULT 1,
+    guest_country VARCHAR(100),
+    num_guests INTEGER DEFAULT 1,
     
     -- Dates
     check_in DATE NOT NULL,
     check_out DATE NOT NULL,
     nights INTEGER GENERATED ALWAYS AS (check_out - check_in) STORED,
-    booked_at TIMESTAMPTZ,
     
-    -- Status
-    status booking_status DEFAULT 'confirmed',
-    
-    -- Pricing (all in property currency - AED)
-    nightly_rate DECIMAL(10,2) NOT NULL, -- Base rate per night
-    subtotal_accommodation DECIMAL(10,2), -- nightly_rate × nights
+    -- Pricing
+    nightly_rate DECIMAL(10,2) NOT NULL,
     cleaning_fee DECIMAL(10,2) DEFAULT 0,
     extra_guest_fee DECIMAL(10,2) DEFAULT 0,
-    other_fees DECIMAL(10,2) DEFAULT 0,
-    discount_amount DECIMAL(10,2) DEFAULT 0,
-    discount_reason VARCHAR(255),
+    discount DECIMAL(10,2) DEFAULT 0,
     
-    -- Gross booking value (before platform fees and taxes)
-    gross_revenue DECIMAL(10,2) GENERATED ALWAYS AS (
-        COALESCE(subtotal_accommodation, 0) + 
-        COALESCE(cleaning_fee, 0) + 
-        COALESCE(extra_guest_fee, 0) + 
-        COALESCE(other_fees, 0) - 
-        COALESCE(discount_amount, 0)
-    ) STORED,
-    
-    -- Taxes & Fees Collected (pass-through)
-    tourism_fee DECIMAL(10,2) DEFAULT 0, -- Tourism Dirham
-    municipality_fee DECIMAL(10,2) DEFAULT 0,
-    vat_collected DECIMAL(10,2) DEFAULT 0,
-    
-    -- Platform Fees (deducted from payout)
+    -- Revenue Calculations
+    gross_revenue DECIMAL(10,2),
     platform_commission DECIMAL(10,2) DEFAULT 0,
-    platform_commission_rate DECIMAL(5,2), -- % for reference
     payment_processing_fee DECIMAL(10,2) DEFAULT 0,
+    net_revenue DECIMAL(10,2),
     
-    -- Net Revenue (what you actually receive)
-    net_revenue DECIMAL(10,2) GENERATED ALWAYS AS (
-        COALESCE(subtotal_accommodation, 0) + 
-        COALESCE(cleaning_fee, 0) + 
-        COALESCE(extra_guest_fee, 0) + 
-        COALESCE(other_fees, 0) - 
-        COALESCE(discount_amount, 0) -
-        COALESCE(platform_commission, 0) -
-        COALESCE(payment_processing_fee, 0)
-    ) STORED,
-    
-    -- Payout Information
-    payout_date DATE,
-    payout_amount DECIMAL(10,2),
-    payout_reference VARCHAR(100),
-    payout_method payment_method,
-    is_paid BOOLEAN DEFAULT FALSE,
-    
-    -- Cancellation
-    cancelled_at TIMESTAMPTZ,
-    cancellation_reason TEXT,
-    refund_amount DECIMAL(10,2) DEFAULT 0,
-    cancellation_fee_retained DECIMAL(10,2) DEFAULT 0,
-    
-    -- Notes & Flags
-    notes TEXT,
-    is_locked BOOLEAN DEFAULT FALSE, -- Lock completed bookings
-    
-    -- Metadata
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    created_by UUID REFERENCES users(id),
-    
-    -- Constraints
-    CONSTRAINT valid_dates CHECK (check_out > check_in),
-    CONSTRAINT positive_nights CHECK (check_out - check_in > 0)
-);
-
--- Indexes for common queries
-CREATE INDEX idx_bookings_property ON bookings(property_id);
-CREATE INDEX idx_bookings_channel ON bookings(channel_id);
-CREATE INDEX idx_bookings_dates ON bookings(check_in, check_out);
-CREATE INDEX idx_bookings_status ON bookings(status);
-CREATE INDEX idx_bookings_payout_date ON bookings(payout_date);
-CREATE INDEX idx_bookings_property_checkin ON bookings(property_id, check_in);
-
--- ----------------------------------------------------------------------------
--- EXPENSES (Expense Ledger)
--- ----------------------------------------------------------------------------
-CREATE TABLE expenses (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    property_id UUID NOT NULL REFERENCES properties(id),
-    category_id UUID NOT NULL REFERENCES expense_categories(id),
-    
-    -- Expense Details
-    expense_date DATE NOT NULL,
-    vendor VARCHAR(255),
-    description TEXT,
-    
-    -- Amounts
-    amount DECIMAL(10,2) NOT NULL,
+    -- Tourism Taxes
+    tourism_dirham DECIMAL(10,2) DEFAULT 0,
+    municipality_fee DECIMAL(10,2) DEFAULT 0,
     vat_amount DECIMAL(10,2) DEFAULT 0,
-    total_amount DECIMAL(10,2) GENERATED ALWAYS AS (amount + COALESCE(vat_amount, 0)) STORED,
     
-    -- Classification
-    cost_type cost_type DEFAULT 'variable',
-    is_booking_linked BOOLEAN DEFAULT FALSE,
-    linked_booking_id UUID REFERENCES bookings(id),
-    
-    -- Payment
+    -- Status & Payment
+    status booking_status DEFAULT 'pending',
     payment_method payment_method,
+    payment_received BOOLEAN DEFAULT FALSE,
     payment_date DATE,
-    payment_reference VARCHAR(100),
-    is_paid BOOLEAN DEFAULT TRUE,
     
-    -- Receipt
-    receipt_url TEXT,
-    receipt_filename VARCHAR(255),
+    -- Booking Reference
+    confirmation_code VARCHAR(50),
+    platform_booking_id VARCHAR(100),
     
     -- Notes
     notes TEXT,
+    internal_notes TEXT,
     
-    -- Reconciliation
-    is_reconciled BOOLEAN DEFAULT FALSE,
-    reconciled_at TIMESTAMPTZ,
-    
-    -- Metadata
+    -- Audit
+    is_locked BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     created_by UUID REFERENCES users(id)
 );
 
--- Indexes
-CREATE INDEX idx_expenses_property ON expenses(property_id);
-CREATE INDEX idx_expenses_category ON expenses(category_id);
-CREATE INDEX idx_expenses_date ON expenses(expense_date);
-CREATE INDEX idx_expenses_property_date ON expenses(property_id, expense_date);
+-- Indexes for bookings
+CREATE INDEX idx_bookings_property_id ON bookings(property_id);
+CREATE INDEX idx_bookings_check_in ON bookings(check_in);
+CREATE INDEX idx_bookings_status ON bookings(status);
 
 -- ----------------------------------------------------------------------------
--- CALENDAR BLOCKS (Non-Revenue Days)
+-- EXPENSES
+-- ----------------------------------------------------------------------------
+CREATE TABLE expenses (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+    category_id UUID REFERENCES expense_categories(id),
+    
+    -- Basic Info
+    description VARCHAR(500) NOT NULL,
+    vendor VARCHAR(255),
+    
+    -- Financial
+    amount DECIMAL(10,2) NOT NULL,
+    vat_amount DECIMAL(10,2) DEFAULT 0,
+    total_amount DECIMAL(10,2),
+    currency CHAR(3) DEFAULT 'AED',
+    
+    -- Payment
+    expense_date DATE NOT NULL,
+    payment_method payment_method,
+    payment_status VARCHAR(20) DEFAULT 'pending',
+    paid_date DATE,
+    reference_number VARCHAR(100),
+    
+    -- Documentation
+    receipt_url TEXT,
+    invoice_number VARCHAR(100),
+    
+    -- Notes
+    notes TEXT,
+    
+    -- Audit
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by UUID REFERENCES users(id)
+);
+
+-- Indexes for expenses
+CREATE INDEX idx_expenses_property_id ON expenses(property_id);
+CREATE INDEX idx_expenses_expense_date ON expenses(expense_date);
+CREATE INDEX idx_expenses_category_id ON expenses(category_id);
+
+-- ----------------------------------------------------------------------------
+-- CALENDAR BLOCKS
 -- ----------------------------------------------------------------------------
 CREATE TABLE calendar_blocks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    property_id UUID NOT NULL REFERENCES properties(id),
-    
+    property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    nights INTEGER GENERATED ALWAYS AS (end_date - start_date) STORED,
-    
-    reason block_reason NOT NULL,
-    description TEXT,
-    
+    reason block_reason DEFAULT 'other',
+    description VARCHAR(500),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    created_by UUID REFERENCES users(id),
-    
-    CONSTRAINT valid_block_dates CHECK (end_date > start_date)
+    created_by UUID REFERENCES users(id)
 );
 
-CREATE INDEX idx_calendar_blocks_property ON calendar_blocks(property_id);
-CREATE INDEX idx_calendar_blocks_dates ON calendar_blocks(start_date, end_date);
-
 -- ----------------------------------------------------------------------------
--- ATTACHMENTS (Receipts & Documents)
+-- ATTACHMENTS
 -- ----------------------------------------------------------------------------
 CREATE TABLE attachments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    
-    -- Polymorphic reference
-    entity_type VARCHAR(50) NOT NULL, -- 'booking', 'expense', 'property'
+    entity_type VARCHAR(50) NOT NULL,
     entity_id UUID NOT NULL,
-    
-    -- File info
     filename VARCHAR(255) NOT NULL,
-    original_filename VARCHAR(255),
-    file_type VARCHAR(50),
+    file_url TEXT NOT NULL,
     file_size INTEGER,
-    storage_path TEXT NOT NULL,
-    
-    -- Metadata
+    mime_type VARCHAR(100),
     uploaded_at TIMESTAMPTZ DEFAULT NOW(),
     uploaded_by UUID REFERENCES users(id)
 );
 
-CREATE INDEX idx_attachments_entity ON attachments(entity_type, entity_id);
-
 -- ----------------------------------------------------------------------------
--- AUDIT LOG (Track all changes)
+-- AUDIT LOG
 -- ----------------------------------------------------------------------------
 CREATE TABLE audit_log (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    
-    -- What changed
     table_name VARCHAR(100) NOT NULL,
     record_id UUID NOT NULL,
-    action VARCHAR(20) NOT NULL, -- INSERT, UPDATE, DELETE
-    
-    -- Change details
+    action VARCHAR(20) NOT NULL,
     old_values JSONB,
     new_values JSONB,
-    changed_fields TEXT[],
-    
-    -- Who and when
     changed_by UUID REFERENCES users(id),
-    changed_at TIMESTAMPTZ DEFAULT NOW(),
-    ip_address INET,
-    user_agent TEXT
+    changed_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_audit_log_table_record ON audit_log(table_name, record_id);
-CREATE INDEX idx_audit_log_changed_at ON audit_log(changed_at);
-
 -- ============================================================================
--- VIEWS FOR REPORTING
+-- TENANCY TABLES
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- Monthly Summary View
+-- TENANCIES (Long-term Rentals)
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE VIEW v_monthly_summary AS
-SELECT 
-    p.id AS property_id,
-    p.name AS property_name,
-    DATE_TRUNC('month', b.check_in)::DATE AS month,
+CREATE TABLE tenancies (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
     
-    -- Booking Metrics
-    COUNT(DISTINCT b.id) FILTER (WHERE b.status NOT IN ('cancelled', 'no_show')) AS total_bookings,
-    SUM(b.nights) FILTER (WHERE b.status NOT IN ('cancelled', 'no_show')) AS booked_nights,
+    -- Tenant Info
+    tenant_name VARCHAR(255) NOT NULL,
+    tenant_email VARCHAR(255),
+    tenant_phone VARCHAR(50),
+    tenant_emirates_id VARCHAR(50),
     
-    -- Revenue
-    SUM(b.gross_revenue) FILTER (WHERE b.status NOT IN ('cancelled', 'no_show')) AS gross_revenue,
-    SUM(b.net_revenue) FILTER (WHERE b.status NOT IN ('cancelled', 'no_show')) AS net_revenue,
-    SUM(b.platform_commission) FILTER (WHERE b.status NOT IN ('cancelled', 'no_show')) AS total_platform_fees,
+    -- Contract Details
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    monthly_rent DECIMAL(10,2) NOT NULL,
+    security_deposit DECIMAL(10,2) DEFAULT 0,
+    num_cheques INTEGER DEFAULT 1,
     
-    -- Averages
-    AVG(b.nightly_rate) FILTER (WHERE b.status NOT IN ('cancelled', 'no_show')) AS avg_nightly_rate,
+    -- Status
+    status tenancy_status DEFAULT 'active',
+    ejari_number VARCHAR(100),
+    contract_url TEXT,
     
-    -- Cancellations
-    COUNT(*) FILTER (WHERE b.status = 'cancelled') AS cancellations,
-    SUM(b.refund_amount) FILTER (WHERE b.status = 'cancelled') AS refund_total
-
-FROM properties p
-LEFT JOIN bookings b ON b.property_id = p.id
-GROUP BY p.id, p.name, DATE_TRUNC('month', b.check_in);
-
--- ----------------------------------------------------------------------------
--- Channel Performance View
--- ----------------------------------------------------------------------------
-CREATE OR REPLACE VIEW v_channel_performance AS
-SELECT 
-    p.id AS property_id,
-    p.name AS property_name,
-    c.id AS channel_id,
-    c.name AS channel_name,
-    c.color_hex,
-    DATE_TRUNC('month', b.check_in)::DATE AS month,
+    -- Notes
+    notes TEXT,
     
-    COUNT(DISTINCT b.id) FILTER (WHERE b.status NOT IN ('cancelled', 'no_show')) AS bookings,
-    SUM(b.nights) FILTER (WHERE b.status NOT IN ('cancelled', 'no_show')) AS nights,
-    SUM(b.gross_revenue) FILTER (WHERE b.status NOT IN ('cancelled', 'no_show')) AS gross_revenue,
-    SUM(b.net_revenue) FILTER (WHERE b.status NOT IN ('cancelled', 'no_show')) AS net_revenue,
-    SUM(b.platform_commission) FILTER (WHERE b.status NOT IN ('cancelled', 'no_show')) AS platform_fees
-
-FROM properties p
-CROSS JOIN channels c
-LEFT JOIN bookings b ON b.property_id = p.id AND b.channel_id = c.id
-GROUP BY p.id, p.name, c.id, c.name, c.color_hex, DATE_TRUNC('month', b.check_in);
+    -- Audit
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by UUID REFERENCES users(id)
+);
 
 -- ----------------------------------------------------------------------------
--- Expense Summary View
+-- TENANCY PAYMENTS (Cheques)
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE VIEW v_expense_summary AS
-SELECT 
-    p.id AS property_id,
-    p.name AS property_name,
-    ec.id AS category_id,
-    ec.code AS category_code,
-    ec.name AS category_name,
-    ec.parent_code,
-    DATE_TRUNC('month', e.expense_date)::DATE AS month,
+CREATE TABLE tenancy_payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenancy_id UUID NOT NULL REFERENCES tenancies(id) ON DELETE CASCADE,
     
-    COUNT(*) AS expense_count,
-    SUM(e.amount) AS amount,
-    SUM(e.vat_amount) AS vat_amount,
-    SUM(e.total_amount) AS total_amount
+    -- Cheque Details
+    cheque_number VARCHAR(50),
+    bank_name VARCHAR(100),
+    amount DECIMAL(10,2) NOT NULL,
+    due_date DATE NOT NULL,
+    
+    -- Status
+    status cheque_status DEFAULT 'pending',
+    deposited_date DATE,
+    cleared_date DATE,
+    
+    -- Notes
+    notes TEXT,
+    
+    -- Audit
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-FROM properties p
-CROSS JOIN expense_categories ec
-LEFT JOIN expenses e ON e.property_id = p.id AND e.category_id = ec.id
-GROUP BY p.id, p.name, ec.id, ec.code, ec.name, ec.parent_code, DATE_TRUNC('month', e.expense_date);
+-- Indexes for tenancies
+CREATE INDEX idx_tenancies_property_id ON tenancies(property_id);
+CREATE INDEX idx_tenancies_status ON tenancies(status);
+CREATE INDEX idx_tenancy_payments_tenancy_id ON tenancy_payments(tenancy_id);
+CREATE INDEX idx_tenancy_payments_due_date ON tenancy_payments(due_date);
+CREATE INDEX idx_tenancy_payments_status ON tenancy_payments(status);
 
 -- ============================================================================
--- FUNCTIONS
+-- OFF-PLAN PROPERTY TABLES
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- Calculate Occupancy Rate for a period
+-- OFF-PLAN PROPERTIES
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION calculate_occupancy(
-    p_property_id UUID,
-    p_start_date DATE,
-    p_end_date DATE
-) RETURNS DECIMAL AS $$
-DECLARE
-    v_total_nights INTEGER;
-    v_booked_nights INTEGER;
-    v_blocked_nights INTEGER;
-BEGIN
-    -- Total nights in period
-    v_total_nights := p_end_date - p_start_date;
+CREATE TABLE offplan_properties (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     
-    -- Booked nights
-    SELECT COALESCE(SUM(
-        LEAST(check_out, p_end_date) - GREATEST(check_in, p_start_date)
-    ), 0)
-    INTO v_booked_nights
-    FROM bookings
-    WHERE property_id = p_property_id
-      AND status NOT IN ('cancelled', 'no_show')
-      AND check_in < p_end_date
-      AND check_out > p_start_date;
+    -- Developer & Project Info
+    developer VARCHAR(255) NOT NULL,
+    project_name VARCHAR(255) NOT NULL,
+    unit_number VARCHAR(100) NOT NULL,
+    reference_number VARCHAR(100),
     
-    -- Blocked nights
-    SELECT COALESCE(SUM(
-        LEAST(end_date, p_end_date) - GREATEST(start_date, p_start_date)
-    ), 0)
-    INTO v_blocked_nights
-    FROM calendar_blocks
-    WHERE property_id = p_property_id
-      AND start_date < p_end_date
-      AND end_date > p_start_date;
+    -- Unit Details
+    unit_type VARCHAR(100),
+    unit_model VARCHAR(50),
+    internal_area_sqm DECIMAL(10,2),
+    balcony_area_sqm DECIMAL(10,2),
+    total_area_sqm DECIMAL(10,2),
+    floor_number INTEGER,
+    building_number VARCHAR(50),
+    bedrooms INTEGER NOT NULL DEFAULT 1,
+    bathrooms DECIMAL(3,1) DEFAULT 1,
+    parking_spots INTEGER DEFAULT 1,
     
-    -- Available nights = total - blocked
-    -- Occupancy = booked / available
-    IF (v_total_nights - v_blocked_nights) > 0 THEN
-        RETURN ROUND((v_booked_nights::DECIMAL / (v_total_nights - v_blocked_nights)) * 100, 2);
-    ELSE
-        RETURN 0;
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
+    -- Location
+    emirate emirate NOT NULL DEFAULT 'abu_dhabi',
+    area VARCHAR(100),
+    community VARCHAR(100),
+    
+    -- Pricing (land_dept_fee auto-calculated based on emirate)
+    base_price DECIMAL(15,2) NOT NULL,
+    land_dept_fee_percent DECIMAL(5,2),  -- 2% Abu Dhabi, 4% Dubai
+    land_dept_fee DECIMAL(15,2),
+    admin_fees DECIMAL(10,2) DEFAULT 0,
+    other_fees DECIMAL(10,2) DEFAULT 0,
+    total_cost DECIMAL(15,2),
+    
+    -- Timeline
+    purchase_date DATE,
+    expected_handover DATE,
+    actual_handover DATE,
+    
+    -- Status & Conversion
+    status offplan_status DEFAULT 'active',
+    converted_property_id UUID REFERENCES properties(id),
+    
+    -- Promotions/Waivers
+    promotion_name VARCHAR(255),
+    amc_waiver_years DECIMAL(3,1),
+    dlp_waiver_years DECIMAL(3,1),
+    
+    -- Notes
+    notes TEXT,
+    
+    -- Audit
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by UUID REFERENCES users(id)
+);
 
 -- ----------------------------------------------------------------------------
--- Calculate NOI for a period
+-- OFF-PLAN PAYMENTS (Payment Schedule/Installments)
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION calculate_noi(
-    p_property_id UUID,
-    p_start_date DATE,
-    p_end_date DATE
-) RETURNS TABLE (
-    net_revenue DECIMAL,
-    operating_expenses DECIMAL,
-    noi DECIMAL,
-    expense_ratio DECIMAL
-) AS $$
-BEGIN
-    RETURN QUERY
-    WITH revenue AS (
-        SELECT COALESCE(SUM(b.net_revenue), 0) AS total
-        FROM bookings b
-        WHERE b.property_id = p_property_id
-          AND b.status NOT IN ('cancelled', 'no_show')
-          AND b.check_in >= p_start_date
-          AND b.check_in < p_end_date
-    ),
-    expenses AS (
-        SELECT COALESCE(SUM(e.total_amount), 0) AS total
-        FROM expenses e
-        JOIN expense_categories ec ON e.category_id = ec.id
-        WHERE e.property_id = p_property_id
-          AND e.expense_date >= p_start_date
-          AND e.expense_date < p_end_date
-          AND ec.category_type = 'operating_expense'
-    )
-    SELECT 
-        r.total AS net_revenue,
-        x.total AS operating_expenses,
-        (r.total - x.total) AS noi,
-        CASE WHEN r.total > 0 
-             THEN ROUND((x.total / r.total) * 100, 2)
-             ELSE 0 
-        END AS expense_ratio
-    FROM revenue r, expenses x;
-END;
-$$ LANGUAGE plpgsql;
+CREATE TABLE offplan_payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    offplan_property_id UUID NOT NULL REFERENCES offplan_properties(id) ON DELETE CASCADE,
+    
+    -- Installment Details
+    installment_number INTEGER NOT NULL,
+    milestone_name VARCHAR(255) NOT NULL,  -- e.g., "Booking", "30% Construction", "Handover"
+    percentage DECIMAL(5,2) NOT NULL,
+    amount DECIMAL(15,2) NOT NULL,
+    due_date DATE,  -- Can be NULL for TBD (e.g., handover)
+    
+    -- Payment Status
+    status offplan_payment_status DEFAULT 'pending',
+    paid_date DATE,
+    paid_amount DECIMAL(15,2),
+    payment_method VARCHAR(50),
+    payment_reference VARCHAR(255),
+    
+    -- Receipt/Proof
+    receipt_url TEXT,
+    
+    -- Notes
+    notes TEXT,
+    
+    -- Audit
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ----------------------------------------------------------------------------
+-- OFF-PLAN DOCUMENTS
+-- ----------------------------------------------------------------------------
+CREATE TABLE offplan_documents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    offplan_property_id UUID NOT NULL REFERENCES offplan_properties(id) ON DELETE CASCADE,
+    
+    -- Document Info
+    document_type VARCHAR(50) NOT NULL,  -- spa, offer_letter, payment_receipt, oqood, noc, other
+    document_name VARCHAR(255) NOT NULL,
+    file_data TEXT NOT NULL,  -- Base64 encoded
+    file_size INTEGER,
+    mime_type VARCHAR(100),
+    
+    -- Audit
+    uploaded_at TIMESTAMPTZ DEFAULT NOW(),
+    uploaded_by UUID REFERENCES users(id)
+);
+
+-- Indexes for off-plan
+CREATE INDEX idx_offplan_properties_status ON offplan_properties(status);
+CREATE INDEX idx_offplan_properties_emirate ON offplan_properties(emirate);
+CREATE INDEX idx_offplan_properties_developer ON offplan_properties(developer);
+CREATE INDEX idx_offplan_payments_property ON offplan_payments(offplan_property_id);
+CREATE INDEX idx_offplan_payments_status ON offplan_payments(status);
+CREATE INDEX idx_offplan_payments_due_date ON offplan_payments(due_date);
+CREATE INDEX idx_offplan_documents_property ON offplan_documents(offplan_property_id);
+
+-- ============================================================================
+-- ACCOUNTING TABLES
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- CHART OF ACCOUNTS
+-- ----------------------------------------------------------------------------
+CREATE TABLE accounts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code VARCHAR(20) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    account_type VARCHAR(50) NOT NULL,  -- asset, liability, equity, revenue, expense
+    parent_code VARCHAR(20),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ----------------------------------------------------------------------------
+-- JOURNAL ENTRIES
+-- ----------------------------------------------------------------------------
+CREATE TABLE journal_entries (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    entry_date DATE NOT NULL,
+    reference VARCHAR(100),
+    description TEXT,
+    property_id UUID REFERENCES properties(id),
+    is_posted BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by UUID REFERENCES users(id)
+);
+
+-- ----------------------------------------------------------------------------
+-- JOURNAL ENTRY LINES
+-- ----------------------------------------------------------------------------
+CREATE TABLE journal_entry_lines (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    journal_entry_id UUID NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+    account_id UUID NOT NULL REFERENCES accounts(id),
+    debit DECIMAL(15,2) DEFAULT 0,
+    credit DECIMAL(15,2) DEFAULT 0,
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for accounting
+CREATE INDEX idx_journal_entries_date ON journal_entries(entry_date);
+CREATE INDEX idx_journal_entry_lines_entry ON journal_entry_lines(journal_entry_id);
+CREATE INDEX idx_journal_entry_lines_account ON journal_entry_lines(account_id);
 
 -- ============================================================================
 -- TRIGGERS
 -- ============================================================================
 
--- ----------------------------------------------------------------------------
 -- Auto-update updated_at timestamp
--- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -690,45 +643,105 @@ CREATE TRIGGER trg_expenses_updated_at BEFORE UPDATE ON expenses
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_channels_updated_at BEFORE UPDATE ON channels 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER trg_expense_categories_updated_at BEFORE UPDATE ON expense_categories 
+CREATE TRIGGER trg_tenancies_updated_at BEFORE UPDATE ON tenancies 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_offplan_properties_updated_at BEFORE UPDATE ON offplan_properties 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_offplan_payments_updated_at BEFORE UPDATE ON offplan_payments 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ----------------------------------------------------------------------------
--- Audit logging trigger
+-- Auto-calculate Off-Plan Costs Trigger
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION audit_trigger_func()
+CREATE OR REPLACE FUNCTION calculate_offplan_costs()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO audit_log (table_name, record_id, action, new_values)
-        VALUES (TG_TABLE_NAME, NEW.id, 'INSERT', to_jsonb(NEW));
-        RETURN NEW;
-    ELSIF TG_OP = 'UPDATE' THEN
-        INSERT INTO audit_log (table_name, record_id, action, old_values, new_values)
-        VALUES (TG_TABLE_NAME, NEW.id, 'UPDATE', to_jsonb(OLD), to_jsonb(NEW));
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO audit_log (table_name, record_id, action, old_values)
-        VALUES (TG_TABLE_NAME, OLD.id, 'DELETE', to_jsonb(OLD));
-        RETURN OLD;
+    -- Set land dept fee percent if not provided
+    IF NEW.land_dept_fee_percent IS NULL THEN
+        IF NEW.emirate = 'dubai' THEN
+            NEW.land_dept_fee_percent := 4.00;
+        ELSE
+            NEW.land_dept_fee_percent := 2.00;  -- Abu Dhabi and others
+        END IF;
     END IF;
+    
+    -- Calculate land dept fee
+    NEW.land_dept_fee := ROUND(NEW.base_price * NEW.land_dept_fee_percent / 100, 2);
+    
+    -- Calculate total cost
+    NEW.total_cost := NEW.base_price + COALESCE(NEW.land_dept_fee, 0) + 
+                      COALESCE(NEW.admin_fees, 0) + COALESCE(NEW.other_fees, 0);
+    
+    NEW.updated_at := NOW();
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Apply audit triggers to main tables
-CREATE TRIGGER trg_bookings_audit AFTER INSERT OR UPDATE OR DELETE ON bookings
-    FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
-CREATE TRIGGER trg_expenses_audit AFTER INSERT OR UPDATE OR DELETE ON expenses
-    FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+CREATE TRIGGER trigger_calculate_offplan_costs
+    BEFORE INSERT OR UPDATE ON offplan_properties
+    FOR EACH ROW EXECUTE FUNCTION calculate_offplan_costs();
+
+-- ----------------------------------------------------------------------------
+-- Update Overdue Off-Plan Payments Function
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION update_offplan_overdue_payments()
+RETURNS void AS $$
+BEGIN
+    UPDATE offplan_payments
+    SET status = 'overdue'
+    WHERE status = 'pending'
+      AND due_date < CURRENT_DATE;
+END;
+$$ LANGUAGE plpgsql;
 
 -- ============================================================================
--- SAMPLE DATA (for testing - can be removed in production)
+-- VIEWS
 -- ============================================================================
 
--- Create a test user (password: 'test123' - hashed)
--- In production, use proper password hashing
-INSERT INTO users (email, password_hash, full_name, role) VALUES
-    ('owner@example.com', 'PLACEHOLDER_HASH', 'Property Owner', 'owner');
+-- Upcoming Off-Plan Payments View
+CREATE OR REPLACE VIEW v_upcoming_offplan_payments AS
+SELECT 
+    p.id AS payment_id,
+    op.id AS property_id,
+    op.developer,
+    op.project_name,
+    op.unit_number,
+    op.emirate::text,
+    p.installment_number,
+    p.milestone_name,
+    p.percentage,
+    p.amount,
+    p.due_date,
+    (p.due_date - CURRENT_DATE) AS days_until_due,
+    p.status::text
+FROM offplan_payments p
+JOIN offplan_properties op ON p.offplan_property_id = op.id
+WHERE p.status = 'pending'
+  AND p.due_date IS NOT NULL
+  AND p.due_date >= CURRENT_DATE
+ORDER BY p.due_date;
+
+-- Off-Plan Investment Summary View
+CREATE OR REPLACE VIEW v_offplan_investment_summary AS
+SELECT 
+    COUNT(DISTINCT op.id) AS total_properties,
+    COALESCE(SUM(op.total_cost), 0) AS total_investment,
+    COALESCE(SUM(
+        (SELECT COALESCE(SUM(paid_amount), 0) 
+         FROM offplan_payments 
+         WHERE offplan_property_id = op.id AND status = 'paid')
+    ), 0) AS total_paid,
+    COALESCE(SUM(op.total_cost), 0) - COALESCE(SUM(
+        (SELECT COALESCE(SUM(paid_amount), 0) 
+         FROM offplan_payments 
+         WHERE offplan_property_id = op.id AND status = 'paid')
+    ), 0) AS total_remaining,
+    (SELECT COUNT(*) FROM offplan_payments WHERE status = 'pending') AS pending_payments_count,
+    (SELECT COUNT(*) FROM offplan_payments WHERE status = 'overdue') AS overdue_payments_count,
+    (SELECT COUNT(*) FROM offplan_payments 
+     WHERE status = 'pending' AND due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30) AS payments_due_30_days
+FROM offplan_properties op
+WHERE op.status = 'active';
 
 -- ============================================================================
 -- END OF SCHEMA

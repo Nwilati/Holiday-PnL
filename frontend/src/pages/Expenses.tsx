@@ -44,6 +44,7 @@ export default function Expenses() {
     category_id: '',
     search: '',
   });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -68,14 +69,21 @@ export default function Expenses() {
 
   const handleDelete = async (expenseId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (deletingId) return; // Prevent multiple deletes
     if (!confirm('Are you sure you want to delete this expense?')) return;
 
+    setDeletingId(expenseId);
     try {
+      console.log('Deleting expense:', expenseId);
       await api.deleteExpense(expenseId);
-      loadData();
-    } catch (error) {
+      console.log('Expense deleted successfully');
+      await loadData();
+    } catch (error: any) {
       console.error('Failed to delete expense:', error);
-      alert('Failed to delete expense');
+      console.error('Error response:', error.response?.data);
+      alert(`Failed to delete expense: ${error.response?.data?.detail || error.message || 'Unknown error'}`);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -244,9 +252,14 @@ export default function Expenses() {
                 <td className="px-4 py-2.5">
                   <button
                     onClick={(e) => handleDelete(expense.id, e)}
-                    className="p-1 text-stone-400 hover:text-red-600 transition-colors"
+                    disabled={deletingId === expense.id}
+                    className={`p-1 text-stone-400 hover:text-red-600 transition-colors ${deletingId === expense.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    {deletingId === expense.id ? (
+                      <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
                   </button>
                 </td>
               </tr>
@@ -557,17 +570,39 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return; // Prevent double submission
+
     setSaving(true);
     try {
       let expenseId = expense?.id;
 
+      // Prepare the data to submit
+      const dataToSubmit = {
+        property_id: formData.property_id,
+        category_id: formData.category_id,
+        expense_date: formData.expense_date,
+        vendor: formData.vendor,
+        description: formData.description,
+        amount: Number(formData.amount) || 0,
+        vat_amount: Number(formData.vat_amount) || 0,
+        payment_method: formData.payment_method,
+        is_paid: formData.is_paid,
+      };
+
+      console.log('Submitting expense:', expense ? 'UPDATE' : 'CREATE', expenseId, dataToSubmit);
+
       if (expense) {
-        await api.updateExpense(expense.id, formData);
+        // Update existing expense
+        const response = await api.updateExpense(expense.id, dataToSubmit);
+        console.log('Update response:', response);
       } else {
-        const response = await api.createExpense(formData);
+        // Create new expense
+        const response = await api.createExpense(dataToSubmit);
+        console.log('Create response:', response);
         expenseId = response.data.id;
       }
 
+      // Upload any pending receipts
       if (pendingFiles.length > 0 && expenseId) {
         for (const file of pendingFiles) {
           await api.uploadReceipt(expenseId, file);
@@ -575,11 +610,13 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
       }
 
       onSave();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving expense:', error);
-      alert('Error saving expense');
+      console.error('Error response:', error.response?.data);
+      alert(`Error saving expense: ${error.response?.data?.detail || error.message || 'Unknown error'}`);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   return (
@@ -814,16 +851,17 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded transition-colors"
+              disabled={saving}
+              className={`px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded transition-colors ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-3 py-1.5 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded disabled:opacity-50 transition-colors"
+              className={`px-3 py-1.5 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded transition-colors ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              {saving ? 'Saving...' : 'Save Expense'}
+              {saving ? 'Saving...' : (expense ? 'Update Expense' : 'Save Expense')}
             </button>
           </div>
         </form>

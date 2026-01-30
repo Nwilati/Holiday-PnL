@@ -1,10 +1,10 @@
 # Holiday Home P&L System - Project Memory
 
-## Last Updated: December 16, 2025
+## Last Updated: January 16, 2026
 
 ---
 
-## PROJECT STATUS: ✅ MVP DEPLOYED TO PRODUCTION
+## PROJECT STATUS: ✅ PRODUCTION - FEATURE RICH
 
 ### Production URLs
 | Component | URL | Status |
@@ -33,26 +33,104 @@ https://github.com/Nwilati/Holiday-PnL
 - **Framework:** React 18 + TypeScript
 - **Build Tool:** Vite
 - **UI:** Tailwind CSS + Recharts
+- **Export:** xlsx library for Excel exports
 - **Hosting:** Vercel
 
 ---
 
 ## DATABASE SCHEMA
 
-### Tables
-1. **properties** - Holiday home properties
-2. **channels** - Booking channels (Airbnb, Booking.com, etc.)
-3. **bookings** - Guest reservations with revenue calculations
-4. **expenses** - Property expenses with categories
-5. **expense_categories** - Expense categorization
-6. **users** - User authentication (not yet implemented in UI)
+### Core Tables
+1. **users** - User authentication
+2. **properties** - Holiday home properties
+3. **channels** - Booking channels (Airbnb, Booking.com, etc.)
+4. **bookings** - Guest reservations with revenue calculations
+5. **expenses** - Property expenses with categories
+6. **expense_categories** - Expense categorization
 7. **calendar_blocks** - Blocked dates
 8. **attachments** - File attachments
 9. **audit_log** - Change tracking
 
+### Tenancy Tables
+10. **tenancies** - Long-term rental contracts
+11. **tenancy_payments** - Cheque payment tracking
+
+### Accounting Tables
+12. **journal_entries** - Double-entry accounting
+13. **journal_entry_lines** - Debit/credit lines
+14. **accounts** - Chart of accounts
+
+### Off-Plan Property Tables
+15. **offplan_properties** - Off-plan property investments
+16. **offplan_payments** - Payment schedule/installments
+17. **offplan_documents** - SPA, offer letters, receipts
+
 ### Custom PostgreSQL Enum Types
 - `booking_status`: pending, confirmed, checked_in, completed, cancelled, no_show
 - `payment_method`: cash, bank_transfer, credit_card, cheque, other
+- `tenancy_status`: active, expired, terminated, renewed
+- `cheque_status`: pending, deposited, cleared, bounced, cancelled, replaced
+- `emirate`: abu_dhabi, dubai, sharjah, ajman, ras_al_khaimah, fujairah, umm_al_quwain
+- `offplan_status`: active, handed_over, cancelled
+- `offplan_payment_status`: pending, paid, overdue
+
+---
+
+## FEATURES COMPLETED
+
+### Phase 1 - Core MVP ✅
+- [x] Dashboard with KPIs (Revenue, NOI, Occupancy, ADR, RevPAR)
+- [x] Revenue trend chart (monthly)
+- [x] Channel mix pie chart
+- [x] Expense breakdown chart
+- [x] Property selector
+- [x] Bookings Management (CRUD, auto-calculations)
+- [x] Expenses Management (CRUD, VAT, categories)
+- [x] Properties listing
+- [x] User authentication
+
+### Phase 2 - Rentals & Accounting ✅
+- [x] **Tenancies Module** - Long-term rental management
+  - Tenant details, contract dates, rent amount
+  - Cheque payment tracking with due dates
+  - Payment status (pending, deposited, cleared, bounced)
+  - Dashboard integration with upcoming cheques
+- [x] **Accounting Module** - Double-entry bookkeeping
+  - Journal entries with debit/credit lines
+  - Chart of accounts
+  - Trial balance view
+- [x] **Tax Reports** - VAT reporting
+  - Period-based VAT calculations
+  - Input/Output VAT summary
+- [x] **Deposits Management** - Security deposit tracking
+
+### Phase 3 - Off-Plan Properties ✅
+- [x] **Off-Plan Portfolio Management**
+  - Developer, project, unit details
+  - Location by emirate (Abu Dhabi, Dubai, etc.)
+  - Auto-calculated land department fees (2% Abu Dhabi, 4% Dubai)
+  - Property status tracking (active, handed_over, cancelled)
+- [x] **Payment Schedule**
+  - Multiple installment payments per property
+  - Milestone-based payments (Booking, Construction %, Handover)
+  - Quick presets: Standard 60/40, Construction Linked
+  - Due date tracking with reminders
+  - Mark payments as paid with method and reference
+  - Overdue payment detection
+- [x] **Cost Breakdown Display**
+  - Base price, Land Dept Fee, Admin Fees, Other Fees
+  - Total cost calculation
+- [x] **Document Management**
+  - Upload SPA, offer letters, payment receipts
+  - Base64 encoded storage
+  - Document type categorization
+- [x] **Dashboard Integration**
+  - Off-Plan Investment Summary widget
+  - Upcoming payments widget (30-day view)
+  - Color-coded urgency (red <7 days, yellow 7-14, green >14)
+- [x] **Export Reports**
+  - Payment schedule PDF
+  - Investment summary Excel
 
 ---
 
@@ -70,35 +148,36 @@ sql = text("""
     VALUES (..., CAST(:status AS booking_status), ...)
 """)
 
-# For payment_method
+# For off-plan emirate
 sql = text("""
-    INSERT INTO expenses (..., payment_method, ...) 
-    VALUES (..., CAST(:payment_method AS payment_method), ...)
+    INSERT INTO offplan_properties (..., emirate, ...) 
+    VALUES (..., CAST(:emirate AS emirate), ...)
+""")
+
+# For off-plan payment status
+sql = text("""
+    UPDATE offplan_payments SET status = CAST('paid' AS offplan_payment_status)
 """)
 ```
 
 **Affected files:**
-- `app/api/bookings.py` - Uses raw SQL for create/update
-- `app/api/expenses.py` - Uses raw SQL for create/update
-- `app/api/dashboard.py` - Uses `cast(Booking.status, String)` for queries
+- `app/api/bookings.py`
+- `app/api/expenses.py`
+- `app/api/tenancies.py`
+- `app/api/offplan.py`
+- `app/api/dashboard.py`
 
 ### Database URL Format
-psycopg3 requires different URL format:
 ```python
 # Convert in database.py
 if database_url.startswith("postgresql://"):
     database_url = database_url.replace("postgresql://", "postgresql+psycopg://")
 ```
 
-### CORS Configuration
+### Model Enum Definition
+Use `create_type=False` for psycopg3 compatibility:
 ```python
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict to Vercel domain in production
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+emirate = Column(PgEnum('abu_dhabi', 'dubai', ..., name='emirate', create_type=False))
 ```
 
 ---
@@ -116,82 +195,6 @@ DEBUG=False
 
 ---
 
-## FEATURES COMPLETED (Phase 1 MVP)
-
-### Dashboard ✅
-- [x] KPIs: Total Revenue, Net Revenue, Expenses, NOI, Occupancy, ADR, RevPAR
-- [x] Revenue trend chart (monthly)
-- [x] Channel mix pie chart
-- [x] Expense breakdown chart
-- [x] Property selector
-
-### Bookings Management ✅
-- [x] List all bookings with filters
-- [x] Create new booking
-- [x] Edit booking
-- [x] Delete booking
-- [x] Auto-calculate nights, gross revenue, net revenue
-- [x] Channel commission calculation
-
-### Expenses Management ✅
-- [x] List expenses with filters
-- [x] Create expense with category
-- [x] Edit expense
-- [x] Delete expense
-- [x] VAT calculation
-- [x] Payment tracking
-
-### Properties ✅
-- [x] Property listing
-- [x] Property details
-- [x] Property selector across all views
-
-### Channels ✅
-- [x] Pre-seeded channels (Airbnb, Booking.com, VRBO, etc.)
-- [x] Commission rates per channel
-
-### Categories ✅
-- [x] Pre-seeded expense categories
-- [x] Operating vs non-operating classification
-
----
-
-## PENDING FEATURES (Phase 2+)
-
-### High Priority
-- [ ] User authentication (login/logout)
-- [ ] Multi-property support (add new properties)
-- [ ] Date range picker on dashboard
-- [ ] Export to Excel/PDF
-- [ ] Receipt upload for expenses
-
-### Medium Priority
-- [ ] Booking calendar view
-- [ ] Recurring expenses
-- [ ] Budget vs actual comparison
-- [ ] Year-over-year comparison
-- [ ] Guest management
-
-### Low Priority
-- [ ] iCal sync with OTAs
-- [ ] Email notifications
-- [ ] Mobile responsive improvements
-- [ ] Dark mode
-- [ ] Multi-currency support
-
----
-
-## TECHNICAL DEBT
-
-1. **CORS:** Currently allows all origins - should restrict to Vercel domain
-2. **Bundle Size:** Frontend chunks exceed 500KB - needs code splitting
-3. **Error Handling:** Add proper error boundaries and logging
-4. **Testing:** No unit/integration tests yet
-5. **API Validation:** Add more input validation
-6. **Rate Limiting:** No rate limiting on API
-
----
-
 ## FILE STRUCTURE
 
 ```
@@ -199,75 +202,147 @@ Holiday-PnL/
 ├── app/
 │   ├── api/
 │   │   ├── auth.py
-│   │   ├── bookings.py      # Raw SQL for enum handling
+│   │   ├── bookings.py
 │   │   ├── categories.py
 │   │   ├── channels.py
-│   │   ├── dashboard.py     # Cast for enum queries
-│   │   ├── expenses.py      # Raw SQL for enum handling
-│   │   └── properties.py
+│   │   ├── dashboard.py
+│   │   ├── expenses.py
+│   │   ├── properties.py
+│   │   ├── receipts.py
+│   │   ├── tenancies.py        # Long-term rentals
+│   │   ├── accounting.py       # Journal entries
+│   │   ├── tax_reports.py      # VAT reports
+│   │   ├── deposits.py         # Security deposits
+│   │   └── offplan.py          # Off-plan properties
 │   ├── core/
-│   │   ├── config.py        # Uses os.environ directly
-│   │   ├── database.py      # psycopg3 URL conversion
+│   │   ├── config.py
+│   │   ├── database.py
 │   │   └── security.py
 │   ├── models/
-│   │   └── models.py        # SQLAlchemy models with PgEnum
+│   │   └── models.py           # All SQLAlchemy models
 │   └── schemas/
-│       └── schemas.py       # Pydantic schemas
+│       └── schemas.py          # All Pydantic schemas
 ├── frontend/
 │   ├── src/
 │   │   ├── api/
-│   │   │   └── client.ts    # API_BASE_URL = Railway URL
+│   │   │   └── client.ts       # API client with all types
 │   │   ├── components/
+│   │   │   ├── DataTable.tsx
+│   │   │   ├── KPICard.tsx
+│   │   │   └── Layout.tsx      # Navigation sidebar
 │   │   └── pages/
-│   ├── vercel.json
-│   └── package.json
-├── Procfile                  # web: uvicorn app.main:app
-├── nixpacks.toml            # Python 3.11 config
-├── requirements.txt         # psycopg[binary]==3.2.3
+│   │       ├── Dashboard.tsx   # Main dashboard with widgets
+│   │       ├── Bookings.tsx
+│   │       ├── Expenses.tsx
+│   │       ├── Properties.tsx
+│   │       ├── Calendar.tsx
+│   │       ├── Reports.tsx
+│   │       ├── Tenancies.tsx   # Long-term rentals
+│   │       ├── Accounting.tsx  # Journal entries
+│   │       ├── TaxReports.tsx  # VAT reports
+│   │       ├── OffPlan.tsx     # Off-plan portfolio
+│   │       ├── Users.tsx
+│   │       └── Login.tsx
+│   ├── package.json            # Includes xlsx dependency
+│   └── vercel.json
+├── Procfile
+├── requirements.txt
 └── main.py
+```
+
+---
+
+## API ENDPOINTS
+
+### Off-Plan Properties
+```
+GET    /api/v1/offplan/properties                    # List all
+POST   /api/v1/offplan/properties                    # Create with payments
+GET    /api/v1/offplan/properties/{id}               # Get with details
+PUT    /api/v1/offplan/properties/{id}               # Update
+DELETE /api/v1/offplan/properties/{id}               # Delete
+
+# Payments
+GET    /api/v1/offplan/properties/{id}/payments      # List payments
+POST   /api/v1/offplan/properties/{id}/payments      # Add payment
+PUT    /api/v1/offplan/payments/{id}                 # Update payment
+DELETE /api/v1/offplan/payments/{id}                 # Delete payment
+POST   /api/v1/offplan/payments/{id}/mark-paid       # Mark as paid
+
+# Documents
+GET    /api/v1/offplan/properties/{id}/documents     # List documents
+POST   /api/v1/offplan/properties/{id}/documents     # Upload document
+GET    /api/v1/offplan/documents/{id}                # Download document
+DELETE /api/v1/offplan/documents/{id}                # Delete document
+
+# Dashboard
+GET    /api/v1/offplan/dashboard/upcoming-payments   # Next 30 days
+GET    /api/v1/offplan/dashboard/summary             # Investment overview
+```
+
+### Tenancies
+```
+GET    /api/v1/tenancies                             # List all
+POST   /api/v1/tenancies                             # Create
+GET    /api/v1/tenancies/{id}                        # Get details
+PUT    /api/v1/tenancies/{id}                        # Update
+DELETE /api/v1/tenancies/{id}                        # Delete
+GET    /api/v1/tenancies/{id}/payments               # List payments
+POST   /api/v1/tenancies/{id}/payments               # Add payment
+PUT    /api/v1/tenancy-payments/{id}                 # Update payment
+DELETE /api/v1/tenancy-payments/{id}                 # Delete payment
 ```
 
 ---
 
 ## SAMPLE DATA
 
-### Property
-- ID: `539a2d8d-f3fb-447b-ba37-b797767a3f74`
-- Name: Shoreline 106
-- Location: Dubai, UAE
-
-### Channels (Pre-seeded)
-- Airbnb (3% commission)
-- Booking.com (15% commission)
-- VRBO (5% commission)
-- Expedia (15% commission)
-- Agoda (15% commission)
-- Direct Booking (0% commission)
+### Off-Plan Property (Gardenia - Fahid Beach Terraces)
+- Developer: Aldar
+- Project: Fahid Beach Terraces
+- Unit: 306
+- Emirate: Abu Dhabi
+- Base Price: AED 9,967,286
+- Land Dept Fee (2%): AED 199,346
+- Admin Fees: AED 3,150
+- Total Cost: AED 10,169,782
+- Payment Plan: 7 installments (10%, 5%, 10%, 10%, 15%, 15%, 35%)
 
 ---
 
 ## TROUBLESHOOTING
 
 ### "CORS Error" in browser
-1. Check if Railway is running
-2. Verify main.py has CORS middleware
-3. Check Railway logs for actual error (often database issue)
+1. Check Railway logs - usually indicates backend crash
+2. Test endpoint directly in Swagger /docs
+3. Verify enum type names in SQL CAST statements
 
-### "500 Internal Server Error"
-1. Check Railway logs for stack trace
-2. Common cause: enum type mismatch
-3. Ensure raw SQL with CAST() for enum columns
+### "500 Internal Server Error" on Off-Plan
+1. Check enum names: `emirate` (not `emirate_type`)
+2. Check enum names: `offplan_status` (not `offplan_status_type`)
+3. Check enum names: `offplan_payment_status`
 
-### "psycopg2 import error"
-1. Ensure using `psycopg[binary]` not `psycopg2-binary`
-2. Check database URL uses `postgresql+psycopg://`
+### Duplicate Payments Issue
+- Ensure form tracks existing payments (with id) vs new payments
+- Only call addOffplanPayment for payments without id
+- Add loading state to prevent double-click submissions
 
 ---
 
-## NEXT DEVELOPMENT PHASE
+## PENDING FEATURES (Future)
 
-Ready to proceed with Phase 2 features. Recommended priority:
-1. **User Authentication** - Secure the application
-2. **Add New Property** - Enable multi-property management
-3. **Date Range Picker** - Better dashboard filtering
-4. **Export Reports** - Excel/PDF generation
+### High Priority
+- [ ] Email notifications for payment reminders
+- [ ] Handover conversion (off-plan to rental property)
+- [ ] Multi-user permissions
+
+### Medium Priority
+- [ ] iCal sync with OTAs
+- [ ] Recurring expenses
+- [ ] Budget vs actual comparison
+- [ ] Mobile app
+
+### Low Priority
+- [ ] Dark mode
+- [ ] Multi-currency support
+- [ ] AI-powered insights

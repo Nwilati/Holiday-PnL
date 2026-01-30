@@ -1,192 +1,98 @@
 # Holiday Home P&L System - Project Structure
 
+## Last Updated: January 16, 2026
+
 ## Directory Structure
 
 ```
-holiday-home-pnl/
+Holiday-PnL/
 │
 ├── README.md
-├── docker-compose.yml
-├── .env.example
 ├── .gitignore
+├── Procfile                    # Railway deployment
+├── requirements.txt            # Python dependencies
+├── nixpacks.toml              # Build config
 │
-├── backend/                    # FastAPI Backend
-│   ├── app/
+├── app/                        # FastAPI Backend
+│   ├── __init__.py
+│   ├── main.py                # FastAPI app entry point
+│   │
+│   ├── api/                   # API Routes
 │   │   ├── __init__.py
-│   │   ├── main.py            # FastAPI app entry point
-│   │   ├── config.py          # Settings and configuration
-│   │   │
-│   │   ├── api/               # API Routes
-│   │   │   ├── __init__.py
-│   │   │   ├── deps.py        # Dependencies (auth, db session)
-│   │   │   ├── v1/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── router.py  # Main router aggregating all routes
-│   │   │   │   ├── auth.py    # Login, logout, token refresh
-│   │   │   │   ├── properties.py
-│   │   │   │   ├── bookings.py
-│   │   │   │   ├── expenses.py
-│   │   │   │   ├── categories.py
-│   │   │   │   ├── channels.py
-│   │   │   │   ├── calendar.py
-│   │   │   │   ├── reports.py
-│   │   │   │   └── dashboard.py
-│   │   │
-│   │   ├── core/              # Core functionality
-│   │   │   ├── __init__.py
-│   │   │   ├── security.py    # JWT, password hashing
-│   │   │   └── exceptions.py  # Custom exceptions
-│   │   │
-│   │   ├── db/                # Database
-│   │   │   ├── __init__.py
-│   │   │   ├── session.py     # DB session management
-│   │   │   └── base.py        # SQLAlchemy base
-│   │   │
-│   │   ├── models/            # SQLAlchemy Models
-│   │   │   ├── __init__.py
-│   │   │   ├── user.py
-│   │   │   ├── property.py
-│   │   │   ├── booking.py
-│   │   │   ├── expense.py
-│   │   │   ├── category.py
-│   │   │   ├── channel.py
-│   │   │   ├── calendar_block.py
-│   │   │   ├── attachment.py
-│   │   │   └── audit_log.py
-│   │   │
-│   │   ├── schemas/           # Pydantic Schemas
-│   │   │   ├── __init__.py
-│   │   │   ├── user.py
-│   │   │   ├── property.py
-│   │   │   ├── booking.py
-│   │   │   ├── expense.py
-│   │   │   ├── category.py
-│   │   │   ├── channel.py
-│   │   │   ├── calendar.py
-│   │   │   ├── dashboard.py
-│   │   │   └── reports.py
-│   │   │
-│   │   ├── services/          # Business Logic
-│   │   │   ├── __init__.py
-│   │   │   ├── booking_service.py
-│   │   │   ├── expense_service.py
-│   │   │   ├── report_service.py
-│   │   │   ├── dashboard_service.py
-│   │   │   └── import_service.py   # CSV import logic
-│   │   │
-│   │   └── utils/             # Utilities
-│   │       ├── __init__.py
-│   │       ├── dates.py       # Date helpers
-│   │       ├── currency.py    # Currency formatting
-│   │       └── storage.py     # File upload helpers
+│   │   ├── auth.py            # Login, logout, token
+│   │   ├── properties.py      # Property CRUD
+│   │   ├── channels.py        # Booking channels
+│   │   ├── categories.py      # Expense categories
+│   │   ├── bookings.py        # Booking management
+│   │   ├── expenses.py        # Expense management
+│   │   ├── dashboard.py       # Dashboard KPIs
+│   │   ├── receipts.py        # Receipt uploads
+│   │   ├── tenancies.py       # Long-term rentals
+│   │   ├── accounting.py      # Journal entries
+│   │   ├── tax_reports.py     # VAT reports
+│   │   ├── deposits.py        # Security deposits
+│   │   └── offplan.py         # Off-plan properties
 │   │
-│   ├── alembic/               # Database migrations
-│   │   ├── env.py
-│   │   ├── versions/
-│   │   └── alembic.ini
-│   │
-│   ├── tests/                 # Backend tests
+│   ├── core/                  # Core functionality
 │   │   ├── __init__.py
-│   │   ├── conftest.py
-│   │   ├── test_bookings.py
-│   │   ├── test_expenses.py
-│   │   └── test_reports.py
+│   │   ├── config.py          # Settings
+│   │   ├── database.py        # DB session
+│   │   └── security.py        # JWT, passwords
 │   │
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── pyproject.toml
+│   ├── models/                # SQLAlchemy Models
+│   │   ├── __init__.py
+│   │   └── models.py          # All models in one file
+│   │
+│   └── schemas/               # Pydantic Schemas
+│       ├── __init__.py
+│       └── schemas.py         # All schemas in one file
 │
 ├── frontend/                   # React Frontend
 │   ├── public/
-│   │   ├── index.html
-│   │   └── favicon.ico
+│   │   └── index.html
 │   │
 │   ├── src/
 │   │   ├── index.tsx
-│   │   ├── App.tsx
+│   │   ├── App.tsx            # Routes & auth
 │   │   │
-│   │   ├── api/               # API client
-│   │   │   ├── client.ts      # Axios instance
-│   │   │   ├── auth.ts
-│   │   │   ├── properties.ts
-│   │   │   ├── bookings.ts
-│   │   │   ├── expenses.ts
-│   │   │   └── reports.ts
+│   │   ├── api/
+│   │   │   └── client.ts      # API client & types
 │   │   │
-│   │   ├── components/        # Reusable components
-│   │   │   ├── ui/            # Base UI (buttons, inputs, cards)
-│   │   │   ├── layout/        # Layout components
-│   │   │   │   ├── Sidebar.tsx
-│   │   │   │   ├── Header.tsx
-│   │   │   │   └── Layout.tsx
-│   │   │   ├── charts/        # Chart components
-│   │   │   │   ├── RevenueChart.tsx
-│   │   │   │   ├── OccupancyHeatmap.tsx
-│   │   │   │   ├── ChannelMix.tsx
-│   │   │   │   └── ExpenseBreakdown.tsx
-│   │   │   ├── forms/         # Form components
-│   │   │   │   ├── BookingForm.tsx
-│   │   │   │   ├── ExpenseForm.tsx
-│   │   │   │   └── PropertyForm.tsx
-│   │   │   └── tables/        # Data tables
-│   │   │       ├── BookingsTable.tsx
-│   │   │       └── ExpensesTable.tsx
+│   │   ├── components/
+│   │   │   ├── DataTable.tsx
+│   │   │   ├── KPICard.tsx
+│   │   │   └── Layout.tsx     # Sidebar navigation
 │   │   │
-│   │   ├── pages/             # Page components
-│   │   │   ├── Dashboard.tsx
-│   │   │   ├── Bookings.tsx
-│   │   │   ├── BookingDetail.tsx
-│   │   │   ├── Expenses.tsx
-│   │   │   ├── ExpenseDetail.tsx
-│   │   │   ├── Calendar.tsx
-│   │   │   ├── Reports.tsx
-│   │   │   ├── Settings.tsx
-│   │   │   ├── Login.tsx
-│   │   │   └── NotFound.tsx
+│   │   ├── contexts/
+│   │   │   └── AuthContext.tsx
 │   │   │
-│   │   ├── hooks/             # Custom hooks
-│   │   │   ├── useAuth.ts
-│   │   │   ├── useBookings.ts
-│   │   │   ├── useExpenses.ts
-│   │   │   └── useDashboard.ts
-│   │   │
-│   │   ├── store/             # State management (Zustand)
-│   │   │   ├── authStore.ts
-│   │   │   ├── propertyStore.ts
-│   │   │   └── uiStore.ts
-│   │   │
-│   │   ├── types/             # TypeScript types
-│   │   │   ├── booking.ts
-│   │   │   ├── expense.ts
-│   │   │   ├── property.ts
-│   │   │   └── dashboard.ts
-│   │   │
-│   │   ├── utils/             # Utilities
-│   │   │   ├── dates.ts
-│   │   │   ├── currency.ts
-│   │   │   └── validators.ts
-│   │   │
-│   │   └── styles/            # Global styles
-│   │       └── globals.css
+│   │   └── pages/
+│   │       ├── Dashboard.tsx
+│   │       ├── Bookings.tsx
+│   │       ├── Expenses.tsx
+│   │       ├── Properties.tsx
+│   │       ├── Calendar.tsx
+│   │       ├── Reports.tsx
+│   │       ├── Tenancies.tsx
+│   │       ├── Accounting.tsx
+│   │       ├── TaxReports.tsx
+│   │       ├── OffPlan.tsx
+│   │       ├── Users.tsx
+│   │       └── Login.tsx
 │   │
 │   ├── package.json
 │   ├── tailwind.config.js
 │   ├── tsconfig.json
 │   ├── vite.config.ts
-│   └── Dockerfile
+│   └── vercel.json
 │
-├── database/                   # Database files
-│   ├── schema.sql             # Main schema
-│   ├── seed.sql               # Sample data
-│   └── migrations/            # Manual migration scripts
-│
-└── docs/                      # Documentation
-    ├── API.md                 # API documentation
-    ├── DEPLOYMENT.md          # Deployment guide
-    └── USER_GUIDE.md          # User manual
+└── docs/
+    ├── PROJECT_MEMORY.md
+    ├── PROJECT_STRUCTURE.md
+    └── schema.sql
 ```
 
-## Tech Stack Details
+## Tech Stack
 
 ### Backend
 | Component | Technology | Purpose |
@@ -194,11 +100,10 @@ holiday-home-pnl/
 | Framework | FastAPI | Async API, auto OpenAPI docs |
 | ORM | SQLAlchemy 2.0 | Database abstraction |
 | Validation | Pydantic v2 | Request/response validation |
-| Auth | JWT (python-jose) | Token-based authentication |
-| Password | passlib[bcrypt] | Password hashing |
-| DB Driver | asyncpg | Async PostgreSQL driver |
-| Migrations | Alembic | Schema migrations |
-| Testing | pytest + httpx | API testing |
+| Auth | JWT (PyJWT) | Token-based authentication |
+| Password | bcrypt | Password hashing |
+| DB Driver | psycopg3 | PostgreSQL driver |
+| Hosting | Railway | Backend hosting |
 
 ### Frontend
 | Component | Technology | Purpose |
@@ -207,154 +112,286 @@ holiday-home-pnl/
 | Language | TypeScript | Type safety |
 | Build | Vite | Fast dev server & builds |
 | Styling | Tailwind CSS | Utility-first CSS |
-| State | Zustand | Lightweight state management |
-| Data Fetching | TanStack Query | Server state management |
 | Charts | Recharts | Data visualization |
-| Tables | TanStack Table | Powerful data tables |
-| Forms | React Hook Form + Zod | Form handling & validation |
 | Icons | Lucide React | Icon library |
 | HTTP | Axios | API client |
-| Dates | date-fns | Date manipulation |
+| Export | xlsx | Excel file generation |
+| Hosting | Vercel | Frontend hosting |
 
 ### Infrastructure
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| Database | PostgreSQL 15 | Primary database |
-| File Storage | S3-compatible | Receipt storage |
-| Hosting | Render / Railway / Fly.io | App hosting |
-| Container | Docker | Containerization |
+| Database | PostgreSQL 15 (Neon) | Primary database |
+| Backend | Railway | API hosting |
+| Frontend | Vercel | Static hosting |
+| Repository | GitHub | Version control |
 
-## API Endpoints Overview
+## Database Models
+
+### Core Models
+```
+users
+├── id (UUID)
+├── email
+├── password_hash
+├── full_name
+├── role
+└── is_active
+
+properties
+├── id (UUID)
+├── name
+├── property_type
+├── address
+├── bedrooms/bathrooms
+├── dtcm_license
+└── vat settings
+
+channels
+├── id (UUID)
+├── code
+├── name
+├── commission_rate
+└── color_hex
+
+bookings
+├── id (UUID)
+├── property_id (FK)
+├── channel_id (FK)
+├── guest_name
+├── check_in/check_out
+├── nightly_rate
+├── gross_revenue
+├── net_revenue
+└── status (enum)
+
+expenses
+├── id (UUID)
+├── property_id (FK)
+├── category_id (FK)
+├── amount
+├── vat_amount
+├── payment_method (enum)
+└── receipt_url
+```
+
+### Tenancy Models
+```
+tenancies
+├── id (UUID)
+├── property_id (FK)
+├── tenant_name
+├── start_date/end_date
+├── monthly_rent
+├── security_deposit
+└── status (enum)
+
+tenancy_payments
+├── id (UUID)
+├── tenancy_id (FK)
+├── cheque_number
+├── amount
+├── due_date
+├── status (enum)
+└── cleared_date
+```
+
+### Off-Plan Models
+```
+offplan_properties
+├── id (UUID)
+├── developer
+├── project_name
+├── unit_number
+├── emirate (enum)
+├── base_price
+├── land_dept_fee
+├── admin_fees
+├── total_cost
+├── purchase_date
+├── expected_handover
+└── status (enum)
+
+offplan_payments
+├── id (UUID)
+├── offplan_property_id (FK)
+├── installment_number
+├── milestone_name
+├── percentage
+├── amount
+├── due_date
+├── status (enum)
+├── paid_date
+└── payment_method
+
+offplan_documents
+├── id (UUID)
+├── offplan_property_id (FK)
+├── document_type
+├── document_name
+├── file_data (base64)
+└── mime_type
+```
+
+## API Endpoints
 
 ### Authentication
 ```
-POST   /api/v1/auth/login          # Login, get tokens
-POST   /api/v1/auth/logout         # Logout
-POST   /api/v1/auth/refresh        # Refresh token
+POST   /api/v1/auth/login          # Get tokens
 GET    /api/v1/auth/me             # Current user
 ```
 
 ### Properties
 ```
-GET    /api/v1/properties          # List all properties
-POST   /api/v1/properties          # Create property
-GET    /api/v1/properties/{id}     # Get property
-PUT    /api/v1/properties/{id}     # Update property
-DELETE /api/v1/properties/{id}     # Delete property
+GET    /api/v1/properties          # List all
+POST   /api/v1/properties          # Create
+GET    /api/v1/properties/{id}     # Get one
+PUT    /api/v1/properties/{id}     # Update
+DELETE /api/v1/properties/{id}     # Delete
 ```
 
 ### Bookings
 ```
-GET    /api/v1/bookings            # List bookings (filterable)
-POST   /api/v1/bookings            # Create booking
-GET    /api/v1/bookings/{id}       # Get booking
-PUT    /api/v1/bookings/{id}       # Update booking
-DELETE /api/v1/bookings/{id}       # Delete booking
-POST   /api/v1/bookings/import     # CSV import
-POST   /api/v1/bookings/{id}/lock  # Lock completed booking
+GET    /api/v1/bookings            # List (filterable)
+POST   /api/v1/bookings            # Create
+GET    /api/v1/bookings/{id}       # Get one
+PUT    /api/v1/bookings/{id}       # Update
+DELETE /api/v1/bookings/{id}       # Delete
 ```
 
 ### Expenses
 ```
-GET    /api/v1/expenses            # List expenses (filterable)
-POST   /api/v1/expenses            # Create expense
-GET    /api/v1/expenses/{id}       # Get expense
-PUT    /api/v1/expenses/{id}       # Update expense
-DELETE /api/v1/expenses/{id}       # Delete expense
-POST   /api/v1/expenses/import     # CSV import
-POST   /api/v1/expenses/{id}/receipt  # Upload receipt
-```
-
-### Categories
-```
-GET    /api/v1/categories          # List all categories
-GET    /api/v1/categories/tree     # Hierarchical tree
-POST   /api/v1/categories          # Create custom category
-PUT    /api/v1/categories/{id}     # Update category
-```
-
-### Channels
-```
-GET    /api/v1/channels            # List channels
-POST   /api/v1/channels            # Create channel
-PUT    /api/v1/channels/{id}       # Update channel
-```
-
-### Calendar
-```
-GET    /api/v1/calendar            # Get calendar view
-POST   /api/v1/calendar/blocks     # Create block
-PUT    /api/v1/calendar/blocks/{id}  # Update block
-DELETE /api/v1/calendar/blocks/{id}  # Delete block
-GET    /api/v1/calendar/availability # Check availability
+GET    /api/v1/expenses            # List (filterable)
+POST   /api/v1/expenses            # Create
+GET    /api/v1/expenses/{id}       # Get one
+PUT    /api/v1/expenses/{id}       # Update
+DELETE /api/v1/expenses/{id}       # Delete
 ```
 
 ### Dashboard
 ```
-GET    /api/v1/dashboard/summary   # Main KPIs
-GET    /api/v1/dashboard/revenue   # Revenue trend
-GET    /api/v1/dashboard/occupancy # Occupancy data
-GET    /api/v1/dashboard/channels  # Channel mix
-GET    /api/v1/dashboard/expenses  # Expense breakdown
-GET    /api/v1/dashboard/forecast  # Forward-looking
+GET    /api/v1/dashboard/kpis      # Main metrics
+GET    /api/v1/dashboard/revenue-trend    # Monthly chart
+GET    /api/v1/dashboard/channel-mix      # Pie chart
+GET    /api/v1/dashboard/expense-breakdown # By category
 ```
 
-### Reports
+### Tenancies
 ```
-GET    /api/v1/reports/pnl         # P&L statement
-GET    /api/v1/reports/bookings    # Booking ledger export
-GET    /api/v1/reports/expenses    # Expense ledger export
-GET    /api/v1/reports/owner-statement  # Owner statement
-GET    /api/v1/reports/tax-summary # Tax pack
+GET    /api/v1/tenancies                       # List all
+POST   /api/v1/tenancies                       # Create
+GET    /api/v1/tenancies/{id}                  # Get details
+PUT    /api/v1/tenancies/{id}                  # Update
+DELETE /api/v1/tenancies/{id}                  # Delete
+GET    /api/v1/tenancies/{id}/payments         # List payments
+POST   /api/v1/tenancies/{id}/payments         # Add payment
+PUT    /api/v1/tenancy-payments/{id}           # Update payment
+DELETE /api/v1/tenancy-payments/{id}           # Delete payment
+GET    /api/v1/tenancies/dashboard/upcoming    # Upcoming cheques
 ```
+
+### Off-Plan Properties
+```
+GET    /api/v1/offplan/properties              # List all
+POST   /api/v1/offplan/properties              # Create with payments
+GET    /api/v1/offplan/properties/{id}         # Get with details
+PUT    /api/v1/offplan/properties/{id}         # Update
+DELETE /api/v1/offplan/properties/{id}         # Delete
+
+GET    /api/v1/offplan/properties/{id}/payments    # List payments
+POST   /api/v1/offplan/properties/{id}/payments    # Add payment
+PUT    /api/v1/offplan/payments/{id}               # Update payment
+DELETE /api/v1/offplan/payments/{id}               # Delete payment
+POST   /api/v1/offplan/payments/{id}/mark-paid     # Mark as paid
+
+GET    /api/v1/offplan/properties/{id}/documents   # List documents
+POST   /api/v1/offplan/properties/{id}/documents   # Upload document
+GET    /api/v1/offplan/documents/{id}              # Download document
+DELETE /api/v1/offplan/documents/{id}              # Delete document
+
+GET    /api/v1/offplan/dashboard/upcoming-payments # Next 30 days
+GET    /api/v1/offplan/dashboard/summary           # Investment overview
+```
+
+### Accounting
+```
+GET    /api/v1/accounting/journal-entries      # List entries
+POST   /api/v1/accounting/journal-entries      # Create entry
+GET    /api/v1/accounting/accounts             # Chart of accounts
+GET    /api/v1/accounting/trial-balance        # Trial balance
+```
+
+### Tax Reports
+```
+GET    /api/v1/tax-reports/vat-summary         # VAT calculations
+```
+
+## Frontend Pages
+
+### Navigation Menu
+1. Dashboard
+2. Calendar
+3. Bookings
+4. Tenancies
+5. **Off-Plan** ← New
+6. Expenses
+7. Accounting
+8. Tax Reports
+9. Properties
+10. Reports
+11. Users
+
+### Off-Plan Page Features
+- **Summary Cards**: Total Investment, Total Paid, Remaining, Paid %
+- **Properties Table**: Developer, Project, Unit, Emirate, Total Cost, Paid %, Next Payment, Status
+- **Expandable Rows**:
+  - Cost Breakdown (Base Price, Land Dept Fee, Admin Fees, Total)
+  - Payment Schedule (with Mark Paid action)
+  - Documents (with Upload/Download)
+- **Add Property Modal**: Full form with payment schedule builder
+- **Quick Presets**: Standard 60/40, Construction Linked
+- **Export**: Payment Schedule PDF, Investment Summary Excel
+
+### Dashboard Widgets
+- KPI Cards (Revenue, NOI, Occupancy, etc.)
+- Revenue Trend Chart
+- Channel Mix Pie Chart
+- Expense Breakdown
+- **Off-Plan Investment Summary** ← New
+- **Upcoming Off-Plan Payments** ← New
 
 ## Environment Variables
 
+### Backend (Railway)
 ```env
-# Backend
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/holiday_pnl
-SECRET_KEY=your-secret-key-here
+DATABASE_URL=postgresql+psycopg://...
+SECRET_KEY=your-secret-key
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# Storage (S3-compatible)
-STORAGE_BUCKET=holiday-pnl-receipts
-STORAGE_ENDPOINT=https://s3.amazonaws.com
-STORAGE_ACCESS_KEY=your-access-key
-STORAGE_SECRET_KEY=your-secret-key
-
-# Frontend
-VITE_API_URL=http://localhost:8000/api/v1
-
-# General
-ENVIRONMENT=development
+APP_NAME=Holiday Home PnL
+DEBUG=False
 ```
 
-## MVP Feature Priority
+### Frontend (Vercel)
+```env
+VITE_API_URL=https://holiday-pnl-production.up.railway.app
+```
 
-### Phase 1 - Core (Weeks 1-2)
-1. ✅ Database schema
-2. [ ] Backend project setup
-3. [ ] User authentication
-4. [ ] Property CRUD
-5. [ ] Booking CRUD + list
-6. [ ] Expense CRUD + list
-7. [ ] Basic dashboard (revenue, occupancy, ADR)
-8. [ ] Simple P&L report
+## Deployment
 
-### Phase 2 - Polish (Weeks 3-4)
-1. [ ] CSV import for bookings
-2. [ ] CSV import for expenses
-3. [ ] Receipt upload
-4. [ ] Calendar view
-5. [ ] Channel performance chart
-6. [ ] Expense breakdown chart
-7. [ ] Export to Excel
+### Backend (Railway)
+1. Connect GitHub repo
+2. Set environment variables
+3. Deploy from main branch
+4. Procfile: `web: uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 
-### Phase 3 - Advanced (Weeks 5-6)
-1. [ ] Good/bad month scoring
-2. [ ] Occupancy heatmap
-3. [ ] Forecasting
-4. [ ] Reconciliation
-5. [ ] Mobile responsiveness
-6. [ ] Notifications
+### Frontend (Vercel)
+1. Connect GitHub repo
+2. Set VITE_API_URL
+3. Build command: `npm run build`
+4. Output directory: `dist`
+
+### Database (Neon)
+1. Create project
+2. Get connection string
+3. Run migrations via SQL Editor
