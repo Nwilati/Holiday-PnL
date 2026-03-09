@@ -148,21 +148,25 @@ def delete_expense(expense_id: UUID, db: Session = Depends(get_db)):
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
 
-    # Delete related journal lines first
-    db.execute(
-        text("DELETE FROM journal_lines WHERE expense_id = :expense_id"),
-        {"expense_id": expense_id}
-    )
+    try:
+        # Delete related journal lines first
+        db.execute(
+            text("DELETE FROM journal_lines WHERE expense_id = :expense_id"),
+            {"expense_id": expense_id}
+        )
 
-    # Delete related receipts
-    db.execute(
-        text("DELETE FROM receipts WHERE expense_id = :expense_id"),
-        {"expense_id": expense_id}
-    )
+        # Delete related receipts
+        db.execute(
+            text("DELETE FROM expense_receipts WHERE expense_id = :expense_id"),
+            {"expense_id": expense_id}
+        )
 
-    # Now delete the expense
-    db.delete(expense)
-    db.commit()
+        # Now delete the expense
+        db.delete(expense)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete expense: {str(e)}")
 
     return {"message": "Expense deleted"}
 
