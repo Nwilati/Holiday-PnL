@@ -156,6 +156,7 @@ class Expense(Base):
     property_id = Column(UUID(as_uuid=True), ForeignKey('properties.id'), nullable=False)
     category_id = Column(UUID(as_uuid=True), ForeignKey('expense_categories.id'), nullable=False)
     expense_date = Column(Date, nullable=False)
+    invoice_number = Column(String(100), nullable=False)
     vendor = Column(String(255))
     description = Column(Text)
     amount = Column(Numeric(10, 2), nullable=False)

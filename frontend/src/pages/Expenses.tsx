@@ -9,6 +9,7 @@ type Expense = {
   property_id: string;
   category_id: string;
   expense_date: string;
+  invoice_number: string;
   vendor: string;
   description: string;
   amount: number;
@@ -120,7 +121,8 @@ export default function Expenses() {
       const search = filters.search.toLowerCase();
       const matchesVendor = expense.vendor?.toLowerCase().includes(search);
       const matchesDesc = expense.description?.toLowerCase().includes(search);
-      if (!matchesVendor && !matchesDesc) return false;
+      const matchesInvoice = expense.invoice_number?.toLowerCase().includes(search);
+      if (!matchesVendor && !matchesDesc && !matchesInvoice) return false;
     }
     return true;
   });
@@ -163,7 +165,7 @@ export default function Expenses() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
           <input
             type="text"
-            placeholder="Search vendor or description..."
+            placeholder="Search invoice #, vendor or description..."
             value={filters.search}
             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
             className="w-full pl-9 pr-3 py-1.5 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
@@ -201,6 +203,7 @@ export default function Expenses() {
           <thead>
             <tr className="bg-stone-50 border-b border-stone-200">
               <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Date</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Invoice #</th>
               <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Vendor</th>
               <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Category</th>
               <th className="px-4 py-2.5 text-left text-xs font-medium text-stone-500 uppercase tracking-wide">Description</th>
@@ -223,6 +226,7 @@ export default function Expenses() {
                 }}
               >
                 <td className="px-4 py-2.5 text-sm text-stone-600 tabular-nums">{formatDate(expense.expense_date)}</td>
+                <td className="px-4 py-2.5 text-sm font-medium text-sky-700">{expense.invoice_number || '-'}</td>
                 <td className="px-4 py-2.5 text-sm font-medium text-stone-900">{expense.vendor || 'N/A'}</td>
                 <td className="px-4 py-2.5 text-sm text-stone-600">{getCategoryName(expense.category_id)}</td>
                 <td className="px-4 py-2.5 text-sm text-stone-600 max-w-xs truncate">{expense.description || '-'}</td>
@@ -266,7 +270,7 @@ export default function Expenses() {
             ))}
             {filteredExpenses.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-12 text-center text-stone-500">
+                <td colSpan={11} className="px-4 py-12 text-center text-stone-500">
                   No expenses found
                 </td>
               </tr>
@@ -476,6 +480,7 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
     property_id: expense?.property_id || properties[0]?.id || '',
     category_id: expense?.category_id || '',
     expense_date: expense?.expense_date || new Date().toISOString().split('T')[0],
+    invoice_number: expense?.invoice_number || '',
     vendor: expense?.vendor || '',
     description: expense?.description || '',
     amount: expense?.amount || 0,
@@ -584,6 +589,7 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
         property_id: formData.property_id,
         category_id: formData.category_id,
         expense_date: formData.expense_date,
+        invoice_number: formData.invoice_number,
         vendor: formData.vendor,
         description: formData.description,
         amount: Number(formData.amount) || 0,
@@ -679,15 +685,26 @@ function ExpenseForm({ expense, properties, categories, onClose, onSave }: Expen
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">Vendor</label>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Invoice / Receipt #</label>
               <input
                 type="text"
-                value={formData.vendor}
-                onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
+                value={formData.invoice_number}
+                onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
-                placeholder="e.g., DEWA, Cleaner"
+                placeholder="e.g., INV-001, REC-2024-123"
+                required
               />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Vendor</label>
+            <input
+              type="text"
+              value={formData.vendor}
+              onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+              placeholder="e.g., DEWA, Cleaner"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1">Description</label>

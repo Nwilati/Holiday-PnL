@@ -53,6 +53,17 @@ def create_expense(expense_data: ExpenseCreate, db: Session = Depends(get_db)):
     if not category:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
 
+    # Check for duplicate invoice number
+    duplicate = db.query(Expense).filter(
+        Expense.invoice_number == expense_data.invoice_number,
+        Expense.property_id == expense_data.property_id
+    ).first()
+    if duplicate:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"An expense with invoice number '{expense_data.invoice_number}' already exists for this property"
+        )
+
     expense_dict = expense_data.model_dump()
     expense_id = uuid4()
 
@@ -60,12 +71,12 @@ def create_expense(expense_data: ExpenseCreate, db: Session = Depends(get_db)):
 
     sql = text("""
         INSERT INTO expenses (
-            id, property_id, category_id, expense_date, vendor, description,
+            id, property_id, category_id, expense_date, invoice_number, vendor, description,
             amount, vat_amount, cost_type, is_booking_linked, linked_booking_id,
             payment_method, payment_date, payment_reference, is_paid,
             receipt_url, receipt_filename, notes, is_reconciled, reconciled_at, created_by
         ) VALUES (
-            :id, :property_id, :category_id, :expense_date, :vendor, :description,
+            :id, :property_id, :category_id, :expense_date, :invoice_number, :vendor, :description,
             :amount, :vat_amount, :cost_type, :is_booking_linked, :linked_booking_id,
             CAST(:payment_method AS payment_method), :payment_date, :payment_reference, :is_paid,
             :receipt_url, :receipt_filename, :notes, :is_reconciled, :reconciled_at, :created_by
@@ -77,6 +88,7 @@ def create_expense(expense_data: ExpenseCreate, db: Session = Depends(get_db)):
         'property_id': expense_dict.get('property_id'),
         'category_id': expense_dict.get('category_id'),
         'expense_date': expense_dict.get('expense_date'),
+        'invoice_number': expense_dict.get('invoice_number'),
         'vendor': expense_dict.get('vendor') or None,
         'description': expense_dict.get('description'),
         'amount': expense_dict.get('amount'),
@@ -120,6 +132,20 @@ def update_expense(expense_id: UUID, expense_data: ExpenseUpdate, db: Session = 
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
+
+    # Check for duplicate invoice number on update
+    if expense_data.invoice_number is not None:
+        property_id = expense_data.property_id or expense.property_id
+        duplicate = db.query(Expense).filter(
+            Expense.invoice_number == expense_data.invoice_number,
+            Expense.property_id == property_id,
+            Expense.id != expense_id
+        ).first()
+        if duplicate:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"An expense with invoice number '{expense_data.invoice_number}' already exists for this property"
+            )
 
     update_data = expense_data.model_dump(exclude_unset=True)
 

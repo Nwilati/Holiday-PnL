@@ -253,6 +253,7 @@ class ExpenseBase(BaseModel):
     property_id: UUID
     category_id: UUID
     expense_date: date
+    invoice_number: str
     vendor: Optional[str] = None
     description: Optional[str] = None
     amount: Decimal
@@ -273,6 +274,7 @@ class ExpenseUpdate(BaseModel):
     property_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     expense_date: Optional[date] = None
+    invoice_number: Optional[str] = None
     vendor: Optional[str] = None
     description: Optional[str] = None
     amount: Optional[Decimal] = None
