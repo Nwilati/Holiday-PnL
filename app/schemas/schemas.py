@@ -253,7 +253,7 @@ class ExpenseBase(BaseModel):
     property_id: UUID
     category_id: UUID
     expense_date: date
-    invoice_number: str
+    invoice_number: Optional[str] = None
     vendor: Optional[str] = None
     description: Optional[str] = None
     amount: Decimal
@@ -268,7 +268,7 @@ class ExpenseBase(BaseModel):
     notes: Optional[str] = None
 
 class ExpenseCreate(ExpenseBase):
-    pass
+    invoice_number: str  # Required for new expenses
 
 class ExpenseUpdate(BaseModel):
     property_id: Optional[UUID] = None
