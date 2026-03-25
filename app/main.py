@@ -22,18 +22,21 @@ app.add_middleware(
 @app.on_event("startup")
 def run_migrations():
     """Run lightweight schema migrations on startup"""
-    with engine.connect() as conn:
-        # Add invoice_number column to expenses if not exists
-        conn.execute(text("""
-            ALTER TABLE expenses ADD COLUMN IF NOT EXISTS invoice_number VARCHAR(100)
-        """))
-        # Add unique constraint on invoice_number + property_id
-        conn.execute(text("""
-            CREATE UNIQUE INDEX IF NOT EXISTS uix_expenses_invoice_property
-            ON expenses (invoice_number, property_id)
-            WHERE invoice_number IS NOT NULL
-        """))
-        conn.commit()
+    try:
+        with engine.connect() as conn:
+            # Add invoice_number column to expenses if not exists
+            conn.execute(text("""
+                ALTER TABLE expenses ADD COLUMN IF NOT EXISTS invoice_number VARCHAR(100)
+            """))
+            # Add unique constraint on invoice_number + property_id
+            conn.execute(text("""
+                CREATE UNIQUE INDEX IF NOT EXISTS uix_expenses_invoice_property
+                ON expenses (invoice_number, property_id)
+                WHERE invoice_number IS NOT NULL
+            """))
+            conn.commit()
+    except Exception as e:
+        print(f"Warning: migration failed (may already be applied): {e}")
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(properties.router, prefix="/api/v1")
