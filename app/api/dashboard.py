@@ -234,7 +234,7 @@ def get_alerts(
             'icon': 'alert-circle',
             'title': f'{overdue.count} cheques overdue',
             'subtitle': f'AED {float(overdue.amount or 0):,.0f} outstanding',
-            'link': '/tenancies'
+            'link': '/tenancies?filter=overdue_cheques'
         })
 
     # 2. Contracts expiring in 30 days
@@ -254,7 +254,7 @@ def get_alerts(
             'icon': 'calendar',
             'title': f'{expiring_count} contract{"s" if expiring_count > 1 else ""} expiring',
             'subtitle': 'Within next 30 days',
-            'link': '/tenancies'
+            'link': '/tenancies?filter=expiring'
         })
 
     # 3. Cheques due this week
@@ -278,7 +278,7 @@ def get_alerts(
             'icon': 'clock',
             'title': f'{due_soon.count} cheques due this week',
             'subtitle': f'AED {float(due_soon.amount or 0):,.0f} to collect',
-            'link': '/tenancies'
+            'link': '/tenancies?filter=due_this_week'
         })
 
     # 4. Pending DTCM payments (if table exists)

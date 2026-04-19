@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Building2,
   Plus,
@@ -115,6 +116,9 @@ const DOCUMENT_TYPES = [
 ];
 
 export default function Tenancies() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkFilter = searchParams.get('filter') || '';
+
   const [properties, setProperties] = useState<Property[]>([]);
   const [tenancies, setTenancies] = useState<Tenancy[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<string>('');
@@ -254,14 +258,60 @@ export default function Tenancies() {
   };
 
   const filteredTenancies = tenancies.filter((t) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      t.tenant_name.toLowerCase().includes(query) ||
-      t.tenant_email.toLowerCase().includes(query) ||
-      (t.ejari_number && t.ejari_number.toLowerCase().includes(query))
-    );
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matches =
+        t.tenant_name.toLowerCase().includes(query) ||
+        t.tenant_email.toLowerCase().includes(query) ||
+        (t.ejari_number && t.ejari_number.toLowerCase().includes(query));
+      if (!matches) return false;
+    }
+
+    // Deep-link filters from dashboard alerts
+    if (deepLinkFilter) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (deepLinkFilter === 'expiring') {
+        if (t.status !== 'active') return false;
+        const end = new Date(t.contract_end);
+        const days = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if (days < 0 || days > 30) return false;
+      } else if (deepLinkFilter === 'overdue_cheques') {
+        if (t.status !== 'active') return false;
+        const hasOverdue = t.cheques?.some((c) => {
+          if (c.status !== 'pending') return false;
+          const due = new Date(c.due_date);
+          return due < today;
+        });
+        if (!hasOverdue) return false;
+      } else if (deepLinkFilter === 'due_this_week') {
+        if (t.status !== 'active') return false;
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        const hasDue = t.cheques?.some((c) => {
+          if (c.status !== 'pending') return false;
+          const due = new Date(c.due_date);
+          return due >= today && due <= weekEnd;
+        });
+        if (!hasDue) return false;
+      }
+    }
+
+    return true;
   });
+
+  const clearDeepLinkFilter = () => {
+    searchParams.delete('filter');
+    setSearchParams(searchParams);
+  };
+
+  const filterLabels: Record<string, string> = {
+    expiring: 'Contracts expiring within 30 days',
+    overdue_cheques: 'Tenancies with overdue cheques',
+    due_this_week: 'Cheques due this week',
+  };
 
   const resetFormData = () => {
     setFormData({
@@ -706,6 +756,25 @@ export default function Tenancies() {
           Add Tenancy
         </button>
       </div>
+
+      {/* Deep-link filter banner */}
+      {deepLinkFilter && filterLabels[deepLinkFilter] && (
+        <div className="flex items-center justify-between px-3 py-2 bg-sky-50 border border-sky-200 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-sky-800">
+            <AlertTriangle className="w-4 h-4" />
+            <span className="font-medium">Filtered:</span>
+            <span>{filterLabels[deepLinkFilter]}</span>
+            <span className="text-sky-600">({filteredTenancies.length})</span>
+          </div>
+          <button
+            onClick={clearDeepLinkFilter}
+            className="flex items-center gap-1 text-xs text-sky-700 hover:text-sky-900"
+          >
+            <X className="w-3.5 h-3.5" />
+            Clear filter
+          </button>
+        </div>
+      )}
 
       {/* Filters bar */}
       <div className="flex items-center gap-3 py-2">
