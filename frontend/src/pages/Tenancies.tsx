@@ -268,32 +268,37 @@ export default function Tenancies() {
       if (!matches) return false;
     }
 
-    // Deep-link filters from dashboard alerts
+    // Deep-link filters from dashboard alerts (string-based date comparison)
     if (deepLinkFilter) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const todayStr = new Date().toISOString().split('T')[0];
+      const weekEnd = new Date();
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      const weekEndStr = weekEnd.toISOString().split('T')[0];
+      const monthEnd = new Date();
+      monthEnd.setDate(monthEnd.getDate() + 30);
+      const monthEndStr = monthEnd.toISOString().split('T')[0];
+
+      const statusLower = (t.status || '').toLowerCase();
 
       if (deepLinkFilter === 'expiring') {
-        if (t.status !== 'active') return false;
-        const end = new Date(t.contract_end);
-        const days = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        if (days < 0 || days > 30) return false;
+        if (statusLower !== 'active') return false;
+        if (!t.contract_end) return false;
+        const endStr = t.contract_end.split('T')[0];
+        if (endStr < todayStr || endStr > monthEndStr) return false;
       } else if (deepLinkFilter === 'overdue_cheques') {
-        if (t.status !== 'active') return false;
-        const hasOverdue = t.cheques?.some((c) => {
-          if (c.status !== 'pending') return false;
-          const due = new Date(c.due_date);
-          return due < today;
+        if (statusLower !== 'active') return false;
+        const hasOverdue = (t.cheques || []).some((c) => {
+          if ((c.status || '').toLowerCase() !== 'pending') return false;
+          const dueStr = (c.due_date || '').split('T')[0];
+          return dueStr && dueStr < todayStr;
         });
         if (!hasOverdue) return false;
       } else if (deepLinkFilter === 'due_this_week') {
-        if (t.status !== 'active') return false;
-        const weekEnd = new Date(today);
-        weekEnd.setDate(weekEnd.getDate() + 7);
-        const hasDue = t.cheques?.some((c) => {
-          if (c.status !== 'pending') return false;
-          const due = new Date(c.due_date);
-          return due >= today && due <= weekEnd;
+        if (statusLower !== 'active') return false;
+        const hasDue = (t.cheques || []).some((c) => {
+          if ((c.status || '').toLowerCase() !== 'pending') return false;
+          const dueStr = (c.due_date || '').split('T')[0];
+          return dueStr && dueStr >= todayStr && dueStr <= weekEndStr;
         });
         if (!hasDue) return false;
       }
@@ -838,7 +843,15 @@ export default function Tenancies() {
               <tr>
                 <td colSpan={7} className="px-4 py-12 text-center text-stone-500">
                   <Banknote className="w-8 h-8 text-stone-300 mx-auto mb-2" />
-                  No tenancies found
+                  <p className="text-sm">No tenancies match your filters</p>
+                  {deepLinkFilter && (
+                    <button
+                      onClick={clearDeepLinkFilter}
+                      className="mt-2 text-xs text-sky-600 hover:text-sky-800 underline"
+                    >
+                      Clear active filter to see all tenancies
+                    </button>
+                  )}
                 </td>
               </tr>
             ) : (
