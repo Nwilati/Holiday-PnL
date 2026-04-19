@@ -13,7 +13,7 @@ import {
   Banknote,
   Eye,
 } from 'lucide-react';
-import { api } from '../api/client';
+import { api, DepositTransaction } from '../api/client';
 
 interface Property {
   id: string;
@@ -130,7 +130,19 @@ export default function Tenancies() {
 
   // Selected tenancy for operations
   const [selectedTenancy, setSelectedTenancy] = useState<Tenancy | null>(null);
-  const [detailsTab, setDetailsTab] = useState<'cheques' | 'documents'>('cheques');
+  const [detailsTab, setDetailsTab] = useState<'cheques' | 'documents' | 'deposit'>('cheques');
+
+  // Deposit tab state
+  const [depositTransactions, setDepositTransactions] = useState<DepositTransaction[]>([]);
+  const [loadingDeposits, setLoadingDeposits] = useState(false);
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [depositForm, setDepositForm] = useState({
+    transaction_type: 'received' as 'received' | 'deduction' | 'refund',
+    amount: '',
+    transaction_date: new Date().toISOString().split('T')[0],
+    description: '',
+    deduction_reason: 'damages',
+  });
 
   // Form state
   const [formData, setFormData] = useState({
@@ -303,6 +315,51 @@ export default function Tenancies() {
       setShowDetailsModal(true);
     } catch (error) {
       console.error('Failed to load tenancy details:', error);
+    }
+  };
+
+  const loadDepositTransactions = async (tenancyId: string) => {
+    setLoadingDeposits(true);
+    try {
+      const response = await api.getDepositTransactions(tenancyId);
+      setDepositTransactions(response.data);
+    } catch (error) {
+      console.error('Failed to load deposit transactions:', error);
+      setDepositTransactions([]);
+    } finally {
+      setLoadingDeposits(false);
+    }
+  };
+
+  const handleSubmitDeposit = async () => {
+    if (!selectedTenancy) return;
+    const amount = parseFloat(depositForm.amount);
+    if (!amount || amount <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+    try {
+      await api.createDepositTransaction({
+        tenancy_id: selectedTenancy.id,
+        transaction_type: depositForm.transaction_type,
+        amount,
+        transaction_date: depositForm.transaction_date,
+        description: depositForm.description || undefined,
+        deduction_reason: depositForm.transaction_type === 'deduction' ? depositForm.deduction_reason : undefined,
+      });
+      setShowDepositModal(false);
+      setDepositForm({
+        transaction_type: 'received',
+        amount: '',
+        transaction_date: new Date().toISOString().split('T')[0],
+        description: '',
+        deduction_reason: 'damages',
+      });
+      await loadDepositTransactions(selectedTenancy.id);
+    } catch (error: any) {
+      console.error('Failed to record deposit transaction:', error);
+      const detail = error?.response?.data?.detail || error?.message || 'Please try again.';
+      alert(`Failed to record deposit transaction:\n${detail}`);
     }
   };
 
@@ -1029,6 +1086,19 @@ export default function Tenancies() {
                   >
                     Documents ({selectedTenancy.documents?.length || 0})
                   </button>
+                  <button
+                    onClick={() => {
+                      setDetailsTab('deposit');
+                      loadDepositTransactions(selectedTenancy.id);
+                    }}
+                    className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+                      detailsTab === 'deposit'
+                        ? 'border-sky-600 text-sky-600'
+                        : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
+                    }`}
+                  >
+                    Deposit
+                  </button>
                 </nav>
               </div>
 
@@ -1258,6 +1328,90 @@ export default function Tenancies() {
                     </div>
                   </div>
                 )}
+
+                {detailsTab === 'deposit' && (
+                  <div className="space-y-4">
+                    {(() => {
+                      const received = depositTransactions.filter(t => t.transaction_type === 'received').reduce((s, t) => s + Number(t.amount), 0);
+                      const deductions = depositTransactions.filter(t => t.transaction_type === 'deduction').reduce((s, t) => s + Number(t.amount), 0);
+                      const refunded = depositTransactions.filter(t => t.transaction_type === 'refund').reduce((s, t) => s + Number(t.amount), 0);
+                      const balance = received - deductions - refunded;
+                      const agreed = Number(selectedTenancy.security_deposit) || 0;
+                      return (
+                        <div className="grid grid-cols-5 gap-3">
+                          <div className="p-3 bg-stone-50 rounded-lg border border-stone-200">
+                            <p className="text-xs text-stone-500">Agreed</p>
+                            <p className="text-sm font-semibold text-stone-800">AED {formatCurrency(agreed)}</p>
+                          </div>
+                          <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                            <p className="text-xs text-green-700">Received</p>
+                            <p className="text-sm font-semibold text-green-800">AED {formatCurrency(received)}</p>
+                          </div>
+                          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                            <p className="text-xs text-red-700">Deductions</p>
+                            <p className="text-sm font-semibold text-red-800">AED {formatCurrency(deductions)}</p>
+                          </div>
+                          <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                            <p className="text-xs text-amber-700">Refunded</p>
+                            <p className="text-sm font-semibold text-amber-800">AED {formatCurrency(refunded)}</p>
+                          </div>
+                          <div className="p-3 bg-sky-50 rounded-lg border border-sky-200">
+                            <p className="text-xs text-sky-700">Balance Held</p>
+                            <p className="text-sm font-semibold text-sky-800">AED {formatCurrency(balance)}</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => setShowDepositModal(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-sky-600 text-white rounded hover:bg-sky-700 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Record Transaction
+                      </button>
+                    </div>
+
+                    {loadingDeposits ? (
+                      <p className="text-sm text-stone-500 text-center py-6">Loading...</p>
+                    ) : depositTransactions.length === 0 ? (
+                      <div className="text-center py-8 text-stone-500">
+                        <Banknote className="w-8 h-8 mx-auto mb-2 text-stone-300" />
+                        <p className="text-sm">No deposit transactions recorded yet</p>
+                        <p className="text-xs mt-1">Click "Record Transaction" to log a received amount, deduction, or refund</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {depositTransactions.map((t) => {
+                          const typeConfig: Record<string, { label: string; color: string }> = {
+                            received: { label: 'Received', color: 'bg-green-50 text-green-700 border-green-200' },
+                            deduction: { label: 'Deduction', color: 'bg-red-50 text-red-700 border-red-200' },
+                            refund: { label: 'Refund', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+                          };
+                          const cfg = typeConfig[t.transaction_type] || typeConfig.received;
+                          return (
+                            <div key={t.id} className="flex items-center justify-between p-3 bg-stone-50 rounded-lg border border-stone-200">
+                              <div className="flex items-center gap-3">
+                                <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded border ${cfg.color}`}>
+                                  {cfg.label}
+                                </span>
+                                <div>
+                                  <p className="text-sm font-medium text-stone-800">AED {formatCurrency(Number(t.amount))}</p>
+                                  <p className="text-xs text-stone-500">
+                                    {formatDate(t.transaction_date)}
+                                    {t.deduction_reason && ` • ${t.deduction_reason}`}
+                                    {t.description && ` • ${t.description}`}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="px-4 py-3 border-t border-stone-200 flex items-center justify-end">
@@ -1266,6 +1420,104 @@ export default function Tenancies() {
                   className="px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded transition-colors"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deposit Transaction Modal */}
+      {showDepositModal && selectedTenancy && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/30" onClick={() => setShowDepositModal(false)} />
+            <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md">
+              <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between">
+                <h2 className="text-base font-semibold text-stone-900">Record Deposit Transaction</h2>
+                <button onClick={() => setShowDepositModal(false)} className="p-1 text-stone-400 hover:text-stone-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Transaction Type</label>
+                  <select
+                    value={depositForm.transaction_type}
+                    onChange={(e) => setDepositForm({ ...depositForm, transaction_type: e.target.value as any })}
+                    className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  >
+                    <option value="received">Received (Tenant paid deposit)</option>
+                    <option value="deduction">Deduction (Keep portion)</option>
+                    <option value="refund">Refund (Return to tenant)</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Amount (AED)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={depositForm.amount}
+                      onChange={(e) => setDepositForm({ ...depositForm, amount: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={depositForm.transaction_date}
+                      onChange={(e) => setDepositForm({ ...depositForm, transaction_date: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+
+                {depositForm.transaction_type === 'deduction' && (
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Deduction Reason</label>
+                    <select
+                      value={depositForm.deduction_reason}
+                      onChange={(e) => setDepositForm({ ...depositForm, deduction_reason: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    >
+                      <option value="damages">Damages</option>
+                      <option value="cleaning">Cleaning</option>
+                      <option value="unpaid_rent">Unpaid Rent</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Description (optional)</label>
+                  <input
+                    type="text"
+                    value={depositForm.description}
+                    onChange={(e) => setDepositForm({ ...depositForm, description: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    placeholder="e.g., Bank transfer reference, damage details"
+                  />
+                </div>
+              </div>
+
+              <div className="px-4 py-3 border-t border-stone-200 flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setShowDepositModal(false)}
+                  className="px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-100 rounded transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitDeposit}
+                  className="px-3 py-1.5 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded transition-colors"
+                >
+                  Save Transaction
                 </button>
               </div>
             </div>

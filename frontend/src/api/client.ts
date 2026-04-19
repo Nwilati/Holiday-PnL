@@ -327,6 +327,22 @@ const api = {
   deleteDocument: (documentId: string) =>
     axiosInstance.delete(`/tenancies/documents/${documentId}`),
 
+  // Security Deposits
+  getDepositTransactions: (tenancyId: string) =>
+    axiosInstance.get<DepositTransaction[]>(`/deposits/transactions/${tenancyId}`),
+
+  createDepositTransaction: (data: {
+    tenancy_id: string;
+    transaction_type: 'received' | 'deduction' | 'refund';
+    amount: number;
+    transaction_date: string;
+    description?: string;
+    deduction_reason?: string;
+  }) => axiosInstance.post(`/deposits/transactions`, data),
+
+  getDepositsSummary: (status?: string) =>
+    axiosInstance.get<DepositSummary[]>(`/deposits/summary`, { params: status ? { status } : {} }),
+
   // ============================================================================
   // OFF-PLAN API METHODS
   // ============================================================================
@@ -389,6 +405,30 @@ export interface AnnualRevenueResponse {
   total_pending: number;
   total_contract_value: number;
   active_tenancies: number;
+}
+
+export interface DepositTransaction {
+  id: string;
+  tenancy_id: string;
+  transaction_type: 'received' | 'deduction' | 'refund';
+  amount: number;
+  transaction_date: string;
+  description?: string;
+  deduction_reason?: string;
+  journal_entry_id?: string;
+  created_at: string;
+}
+
+export interface DepositSummary {
+  tenancy_id: string;
+  tenant_name: string;
+  property_name: string;
+  deposit_amount: number;
+  received: number;
+  deductions: number;
+  refunded: number;
+  balance: number;
+  status: string;
 }
 
 // ============================================================================
