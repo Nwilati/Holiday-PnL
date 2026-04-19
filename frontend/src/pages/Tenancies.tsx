@@ -337,9 +337,14 @@ export default function Tenancies() {
 
       setShowFormModal(false);
       loadTenancies();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save tenancy:', error);
-      alert('Failed to save tenancy. Please try again.');
+      console.error('Error response:', error?.response?.data);
+      const detail = error?.response?.data?.detail;
+      const message = Array.isArray(detail)
+        ? detail.map((d: any) => `${d.loc?.join('.')}: ${d.msg}`).join('\n')
+        : detail || error?.message || 'Please try again.';
+      alert(`Failed to save tenancy:\n${message}`);
     }
   };
 
