@@ -13,7 +13,8 @@ import {
   Banknote,
   Eye,
 } from 'lucide-react';
-import { api, DepositTransaction } from '../api/client';
+import { api } from '../api/client';
+import type { DepositTransaction } from '../api/client';
 
 interface Property {
   id: string;
