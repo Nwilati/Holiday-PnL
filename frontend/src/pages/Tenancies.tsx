@@ -66,12 +66,28 @@ interface Tenancy {
   previous_tenancy_id?: string;
   termination_date?: string;
   termination_reason?: string;
+  charge_penalty?: boolean;
+  penalty_amount?: number;
+  refund_amount?: number;
+  balance_due_amount?: number;
   notes?: string;
   created_at: string;
   updated_at: string;
   cheques?: Cheque[];
   documents?: Document[];
   property_name?: string;
+}
+
+interface TerminationSettlement {
+  per_day_rent: number;
+  days_occupied: number;
+  rent_for_occupancy: number;
+  charge_penalty: boolean;
+  penalty_amount: number;
+  collected: number;
+  refund_amount: number;
+  balance_due_amount: number;
+  cheques_voided: number;
 }
 
 // SAP-style status badge colors
@@ -85,6 +101,8 @@ const getStatusColor = (status: string) => {
     expired: 'bg-stone-100 text-stone-600 border border-stone-200',
     terminated: 'bg-red-50 text-red-700 border border-red-200',
     bounced: 'bg-red-50 text-red-700 border border-red-200',
+    cancelled: 'bg-stone-100 text-stone-500 border border-stone-200 line-through',
+    replaced: 'bg-stone-100 text-stone-500 border border-stone-200',
     renewed: 'bg-sky-50 text-sky-700 border border-sky-200',
   };
   return colors[status.toLowerCase()] || 'bg-stone-100 text-stone-600 border border-stone-200';
@@ -95,6 +113,8 @@ const PAYMENT_METHOD_CONFIG = {
   cheque: { label: 'Cheque', color: 'bg-blue-50 text-blue-700 border-blue-200' },
   bank_transfer: { label: 'Bank Transfer', color: 'bg-purple-50 text-purple-700 border-purple-200' },
   cash: { label: 'Cash', color: 'bg-green-50 text-green-700 border-green-200' },
+  refund: { label: 'Refund', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  balance_due: { label: 'Balance Due', color: 'bg-amber-50 text-amber-700 border-amber-200' },
 };
 
 // Payment method badge component
@@ -178,7 +198,10 @@ export default function Tenancies() {
   const [terminationData, setTerminationData] = useState({
     termination_date: '',
     termination_reason: '',
+    charge_penalty: false,
   });
+  const [terminationPreview, setTerminationPreview] = useState<TerminationSettlement | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Document upload
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -507,9 +530,38 @@ export default function Tenancies() {
     setTerminationData({
       termination_date: new Date().toISOString().split('T')[0],
       termination_reason: '',
+      charge_penalty: false,
     });
+    setTerminationPreview(null);
     setShowTerminateModal(true);
   };
+
+  // Live settlement preview while the terminate modal is open.
+  useEffect(() => {
+    if (!showTerminateModal || !selectedTenancy || !terminationData.termination_date) {
+      setTerminationPreview(null);
+      return;
+    }
+    let cancelled = false;
+    setPreviewLoading(true);
+    api
+      .previewTermination(selectedTenancy.id, {
+        termination_date: terminationData.termination_date,
+        charge_penalty: terminationData.charge_penalty,
+      })
+      .then((res) => {
+        if (!cancelled) setTerminationPreview(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setTerminationPreview(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showTerminateModal, selectedTenancy, terminationData.termination_date, terminationData.charge_penalty]);
 
   const handleSubmitTermination = async () => {
     if (!selectedTenancy) return;
@@ -517,6 +569,7 @@ export default function Tenancies() {
     try {
       await api.terminateTenancy(selectedTenancy.id, terminationData);
       setShowTerminateModal(false);
+      setTerminationPreview(null);
       loadTenancies();
     } catch (error) {
       console.error('Failed to terminate tenancy:', error);
@@ -1726,6 +1779,34 @@ export default function Tenancies() {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-2">Early termination penalty</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTerminationData({ ...terminationData, charge_penalty: true })}
+                      className={`flex-1 px-3 py-2 text-sm font-medium rounded border transition-colors ${
+                        terminationData.charge_penalty
+                          ? 'bg-red-600 text-white border-red-600'
+                          : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                      }`}
+                    >
+                      Charge 1 month
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTerminationData({ ...terminationData, charge_penalty: false })}
+                      className={`flex-1 px-3 py-2 text-sm font-medium rounded border transition-colors ${
+                        !terminationData.charge_penalty
+                          ? 'bg-stone-700 text-white border-stone-700'
+                          : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                      }`}
+                    >
+                      No penalty
+                    </button>
+                  </div>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-stone-700 mb-1">Reason</label>
                   <textarea
                     value={terminationData.termination_reason}
@@ -1734,6 +1815,64 @@ export default function Tenancies() {
                     className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500"
                     placeholder="Enter reason for termination..."
                   />
+                </div>
+
+                {/* Settlement breakdown */}
+                <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">Settlement</p>
+                  {previewLoading && !terminationPreview ? (
+                    <p className="text-sm text-stone-400">Calculating…</p>
+                  ) : terminationPreview ? (
+                    <div className="space-y-1.5 text-sm">
+                      <div className="flex justify-between text-stone-600">
+                        <span>Per-day rent (annual ÷ 360)</span>
+                        <span>AED {formatCurrency(terminationPreview.per_day_rent)}</span>
+                      </div>
+                      <div className="flex justify-between text-stone-600">
+                        <span>Days occupied</span>
+                        <span>{terminationPreview.days_occupied}</span>
+                      </div>
+                      <div className="flex justify-between text-stone-600">
+                        <span>Rent for occupancy</span>
+                        <span>AED {formatCurrency(terminationPreview.rent_for_occupancy)}</span>
+                      </div>
+                      {terminationPreview.charge_penalty && (
+                        <div className="flex justify-between text-stone-600">
+                          <span>Penalty (1 month)</span>
+                          <span>AED {formatCurrency(terminationPreview.penalty_amount)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-stone-600">
+                        <span>Collected (cleared + deposited)</span>
+                        <span>AED {formatCurrency(terminationPreview.collected)}</span>
+                      </div>
+                      {terminationPreview.cheques_voided > 0 && (
+                        <div className="flex justify-between text-amber-600">
+                          <span>Future cheques to cancel</span>
+                          <span>{terminationPreview.cheques_voided}</span>
+                        </div>
+                      )}
+                      <div className="border-t border-stone-200 my-1.5" />
+                      {terminationPreview.refund_amount > 0 ? (
+                        <div className="flex justify-between font-semibold text-emerald-700">
+                          <span>Refund to tenant</span>
+                          <span>AED {formatCurrency(terminationPreview.refund_amount)}</span>
+                        </div>
+                      ) : terminationPreview.balance_due_amount > 0 ? (
+                        <div className="flex justify-between font-semibold text-red-700">
+                          <span>Balance due from tenant</span>
+                          <span>AED {formatCurrency(terminationPreview.balance_due_amount)}</span>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between font-semibold text-stone-700">
+                          <span>Settled</span>
+                          <span>AED 0</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-stone-400">Pick a termination date to see the settlement.</p>
+                  )}
                 </div>
               </div>
 

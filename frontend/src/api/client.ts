@@ -37,13 +37,13 @@ axiosInstance.interceptors.response.use(
 export interface TenancyCheque {
   id: string;
   tenancy_id: string;
-  payment_method?: 'cheque' | 'bank_transfer' | 'cash';
+  payment_method?: 'cheque' | 'bank_transfer' | 'cash' | 'refund' | 'balance_due';
   cheque_number?: string;
   bank_name?: string;
   reference_number?: string;
   amount: number;
   due_date: string;
-  status: 'pending' | 'deposited' | 'cleared' | 'bounced';
+  status: 'pending' | 'deposited' | 'cleared' | 'bounced' | 'cancelled' | 'replaced';
   deposited_date?: string;
   cleared_date?: string;
   bounce_reason?: string;
@@ -79,12 +79,33 @@ export interface Tenancy {
   previous_tenancy_id?: string;
   termination_date?: string;
   termination_reason?: string;
+  charge_penalty?: boolean;
+  penalty_amount?: number;
+  refund_amount?: number;
+  balance_due_amount?: number;
   notes?: string;
   created_at: string;
   updated_at: string;
   cheques?: TenancyCheque[];
   documents?: TenancyDocument[];
   property_name?: string;
+}
+
+export interface TenancyTerminationResult {
+  per_day_rent: number;
+  days_occupied: number;
+  rent_for_occupancy: number;
+  charge_penalty: boolean;
+  penalty_amount: number;
+  collected: number;
+  refund_amount: number;
+  balance_due_amount: number;
+  cheques_voided: number;
+}
+
+export interface TenancyTerminateResponse {
+  tenancy: Tenancy;
+  settlement: TenancyTerminationResult;
 }
 
 export interface TenancyCreateInput {
@@ -147,6 +168,22 @@ export interface UpcomingChequesResponse {
   cheques: UpcomingCheque[];
   total_amount: number;
   count: number;
+}
+
+export interface IncomeStatementLine {
+  account_code: string;
+  account_name: string;
+  amount: number;
+}
+
+export interface IncomeStatementResponse {
+  start_date: string;
+  end_date: string;
+  revenue: IncomeStatementLine[];
+  expenses: IncomeStatementLine[];
+  total_revenue: number;
+  total_expenses: number;
+  net_profit: number;
 }
 
 // API methods
@@ -271,8 +308,11 @@ const api = {
     axiosInstance.delete(`/tenancies/${id}`),
 
   // Tenancy Lifecycle
-  terminateTenancy: (id: string, data: { termination_date: string; termination_reason: string }) =>
-    axiosInstance.post<Tenancy>(`/tenancies/${id}/terminate`, data),
+  previewTermination: (id: string, data: { termination_date: string; charge_penalty: boolean }) =>
+    axiosInstance.post<TenancyTerminationResult>(`/tenancies/${id}/terminate/preview`, data),
+
+  terminateTenancy: (id: string, data: { termination_date: string; termination_reason: string; charge_penalty: boolean }) =>
+    axiosInstance.post<TenancyTerminateResponse>(`/tenancies/${id}/terminate`, data),
 
   renewTenancy: (id: string, data: TenancyRenewInput) =>
     axiosInstance.post<Tenancy>(`/tenancies/${id}/renew`, data),
@@ -309,6 +349,13 @@ const api = {
   // Dashboard - Annual Revenue
   getAnnualRevenue: (params?: { property_id?: string; start_date?: string; end_date?: string }) =>
     axiosInstance.get<AnnualRevenueResponse>('/tenancies/dashboard/annual-revenue', { params }),
+
+  // Accounting - Income Statement (journal-based P&L) + tenancy backfill
+  getIncomeStatement: (params?: { start_date?: string; end_date?: string; property_id?: string }) =>
+    axiosInstance.get<IncomeStatementResponse>('/accounting/income-statement', { params }),
+
+  backfillTenancyJournals: () =>
+    axiosInstance.post<{ created: number; skipped: number }>('/accounting/backfill-tenancy-journals'),
 
   // Direct Cheque Operations (by cheque ID only)
   depositCheque: (chequeId: string, data: { deposited_date: string }) =>

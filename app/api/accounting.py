@@ -1,18 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
-from typing import List, Optional
+from typing import List, Optional, Any
 from uuid import UUID, uuid4
 from datetime import date, datetime
 from decimal import Decimal
 
 from app.core.database import get_db
-from app.models.models import Account, JournalEntry, JournalLine, Booking, Expense, ExpenseCategory, Property, Channel
+from app.models.models import (
+    Account, JournalEntry, JournalLine, Booking, Expense, ExpenseCategory,
+    Property, Channel, Tenancy, TenancyCheque
+)
 from app.schemas.accounting_schemas import (
     AccountCreate, AccountUpdate, AccountResponse,
     JournalEntryCreate, JournalEntryUpdate, JournalEntryResponse,
     JournalLineCreate, JournalLineResponse,
-    AccountBalance, TrialBalanceResponse
+    AccountBalance, TrialBalanceResponse,
+    IncomeStatementLine, IncomeStatementResponse
 )
 
 router = APIRouter(prefix="/accounting", tags=["Accounting"])
@@ -126,7 +130,7 @@ EXPENSE_CATEGORY_TO_ACCOUNT = {
 }
 
 
-def get_expense_account_code(category: str) -> str:
+def get_expense_account_code(category: Optional[str]) -> str:
     """Map expense category to GL account code"""
     if not category:
         return '5800'  # Default to Other Expenses
@@ -510,7 +514,7 @@ def get_trial_balance(
         ORDER BY a.display_order, a.code
     """)
 
-    params = {"as_of_date": as_of_date}
+    params: dict[str, Any] = {"as_of_date": as_of_date}
     if property_id:
         params["property_id"] = property_id
 
@@ -755,3 +759,240 @@ def generate_expense_journal(expense_id: UUID, db: Session = Depends(get_db)):
     )
 
     return create_journal_entry(entry_data, db)
+
+
+# ============================================================================
+# TENANCY (LONG-TERM) JOURNAL GENERATION
+# ============================================================================
+
+def _post_journal(db: Session, entry_date: date, source: str, source_id: UUID,
+                  description: str, lines: list) -> JournalEntry:
+    """Create a POSTED journal entry from a list of line dicts.
+
+    Each line dict: {account_id, debit, credit, property_id?, tenancy_id?, description?}.
+    Mirrors the deposits.py pattern (is_posted=True) so entries appear immediately
+    in the trial balance / income statement.
+    """
+    entry = JournalEntry(
+        id=uuid4(),
+        entry_number=generate_journal_number(db),
+        entry_date=entry_date,
+        source=source,
+        source_id=source_id,
+        description=description,
+        is_posted=True,
+        posted_at=datetime.now()
+    )
+    db.add(entry)
+    db.flush()
+
+    for i, ln in enumerate(lines):
+        db.add(JournalLine(
+            id=uuid4(),
+            journal_entry_id=entry.id,
+            account_id=ln['account_id'],
+            debit=ln.get('debit', Decimal('0')),
+            credit=ln.get('credit', Decimal('0')),
+            property_id=ln.get('property_id'),
+            tenancy_id=ln.get('tenancy_id'),
+            description=ln.get('description'),
+            line_order=i
+        ))
+
+    return entry
+
+
+def generate_tenancy_payment_journal(db: Session, cheque_id: UUID):
+    """Post a cash-basis journal for a cleared tenancy rent payment.
+
+    Dr 1102 Bank / Cr 4201 Rent Revenue. Idempotent (source='tenancy_payment').
+    Returns the entry, or None if not eligible / already posted.
+    """
+    cheque = db.query(TenancyCheque).filter(TenancyCheque.id == cheque_id).first()
+    if not cheque:
+        return None
+    if str(cheque.status) != 'cleared':
+        return None
+    # Refund settlement lines are handled by the termination journal, not here.
+    if (cheque.payment_method or '') == 'refund':
+        return None
+    amount = Decimal(str(cheque.amount or 0))
+    if amount <= 0:
+        return None
+
+    # Duplicate guard
+    exists = db.query(JournalEntry).filter(
+        JournalEntry.source == 'tenancy_payment',
+        JournalEntry.source_id == cheque.id
+    ).first()
+    if exists:
+        return None
+
+    tenancy = db.query(Tenancy).filter(Tenancy.id == cheque.tenancy_id).first()
+    if not tenancy:
+        return None
+
+    acc_bank = get_account_by_code(db, '1102')   # CBD Bank Account
+    acc_rent = get_account_by_code(db, '4201')   # Rent Revenue (Annual Tenancy)
+
+    is_balance = (cheque.payment_method or '') == 'balance_due'
+    label = 'Rent balance' if is_balance else 'Rent'
+    entry_date = cheque.cleared_date or cheque.due_date
+
+    entry = _post_journal(
+        db, entry_date, 'tenancy_payment', cheque.id,
+        f"Tenancy {label.lower()} received - {tenancy.tenant_name}",
+        [
+            {'account_id': acc_bank.id, 'debit': amount, 'credit': Decimal('0'),
+             'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
+             'description': f'{label} received from {tenancy.tenant_name}'},
+            {'account_id': acc_rent.id, 'debit': Decimal('0'), 'credit': amount,
+             'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
+             'description': f'Annual tenancy {label.lower()} - {tenancy.tenant_name}'},
+        ]
+    )
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+def generate_tenancy_termination_journal(db: Session, tenancy_id: UUID):
+    """Post the early-termination settlement journal for a terminated tenancy.
+
+    Dr 4201 Rent Revenue (refund + penalty)  -- reverse over-recognized rent
+    Cr 4303 Early Termination Penalty (penalty, if charged)
+    Cr 1102 Bank (refund paid to tenant)
+    Idempotent (source='tenancy_termination'). Only the refund case posts here;
+    a balance-due case is recognized when that line later clears.
+    """
+    tenancy = db.query(Tenancy).filter(Tenancy.id == tenancy_id).first()
+    if not tenancy:
+        return None
+    if str(tenancy.status) != 'terminated':
+        return None
+
+    refund = Decimal(str(tenancy.refund_amount or 0))
+    penalty = Decimal(str(tenancy.penalty_amount or 0)) if tenancy.charge_penalty else Decimal('0')
+    if refund <= 0:
+        return None
+
+    exists = db.query(JournalEntry).filter(
+        JournalEntry.source == 'tenancy_termination',
+        JournalEntry.source_id == tenancy.id
+    ).first()
+    if exists:
+        return None
+
+    acc_bank = get_account_by_code(db, '1102')
+    acc_rent = get_account_by_code(db, '4201')
+
+    lines = [
+        {'account_id': acc_rent.id, 'debit': refund + penalty, 'credit': Decimal('0'),
+         'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
+         'description': f'Reverse rent on early termination - {tenancy.tenant_name}'},
+    ]
+    if penalty > 0:
+        acc_penalty = get_account_by_code(db, '4303')  # Early Termination Penalty
+        lines.append({'account_id': acc_penalty.id, 'debit': Decimal('0'), 'credit': penalty,
+                      'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
+                      'description': f'Early termination penalty - {tenancy.tenant_name}'})
+    lines.append({'account_id': acc_bank.id, 'debit': Decimal('0'), 'credit': refund,
+                  'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
+                  'description': f'Refund paid to {tenancy.tenant_name}'})
+
+    entry = _post_journal(
+        db, tenancy.termination_date or date.today(), 'tenancy_termination', tenancy.id,
+        f"Early termination settlement - {tenancy.tenant_name}", lines
+    )
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+@router.post("/backfill-tenancy-journals")
+def backfill_tenancy_journals(db: Session = Depends(get_db)):
+    """Post journal entries for all historical cleared tenancy payments and
+    terminated-tenancy settlements. Idempotent and safe to re-run."""
+    created = 0
+    skipped = 0
+
+    for cheque in db.query(TenancyCheque).all():
+        if generate_tenancy_payment_journal(db, cheque.id):
+            created += 1
+        else:
+            skipped += 1
+
+    for tenancy in db.query(Tenancy).all():
+        if generate_tenancy_termination_journal(db, tenancy.id):
+            created += 1
+        else:
+            skipped += 1
+
+    return {"created": created, "skipped": skipped}
+
+
+@router.get("/income-statement", response_model=IncomeStatementResponse)
+def get_income_statement(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    property_id: Optional[UUID] = None,
+    db: Session = Depends(get_db)
+):
+    """Journal-based P&L: revenue (short + long term) minus expenses across all
+    properties, from posted journal entries. Defaults to year-to-date."""
+    if not end_date:
+        end_date = date.today()
+    if not start_date:
+        start_date = end_date.replace(month=1, day=1)
+
+    property_filter = "AND jl.property_id = :property_id" if property_id else ""
+
+    sql = text(f"""
+        SELECT a.code, a.name, a.account_type,
+               COALESCE(SUM(jl.debit), 0) AS debit_total,
+               COALESCE(SUM(jl.credit), 0) AS credit_total
+        FROM accounts a
+        JOIN journal_lines jl ON jl.account_id = a.id
+        JOIN journal_entries je ON je.id = jl.journal_entry_id
+        WHERE je.is_posted = TRUE
+          AND je.entry_date BETWEEN :start_date AND :end_date
+          AND a.account_type IN ('income', 'expense')
+          {property_filter}
+        GROUP BY a.code, a.name, a.account_type, a.display_order
+        ORDER BY a.display_order, a.code
+    """)
+
+    params: dict[str, Any] = {'start_date': start_date, 'end_date': end_date}
+    if property_id:
+        params['property_id'] = property_id
+
+    rows = db.execute(sql, params).fetchall()
+
+    revenue: list = []
+    expenses: list = []
+    total_revenue = Decimal('0')
+    total_expenses = Decimal('0')
+
+    for row in rows:
+        debit = Decimal(str(row.debit_total))
+        credit = Decimal(str(row.credit_total))
+        if row.account_type == 'income':
+            amount = credit - debit
+            if amount != 0:
+                revenue.append(IncomeStatementLine(account_code=row.code, account_name=row.name, amount=amount))
+                total_revenue += amount
+        else:  # expense
+            amount = debit - credit
+            if amount != 0:
+                expenses.append(IncomeStatementLine(account_code=row.code, account_name=row.name, amount=amount))
+                total_expenses += amount
+
+    return IncomeStatementResponse(
+        start_date=start_date,
+        end_date=end_date,
+        revenue=revenue,
+        expenses=expenses,
+        total_revenue=total_revenue,
+        total_expenses=total_expenses,
+        net_profit=total_revenue - total_expenses
+    )

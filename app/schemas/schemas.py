@@ -378,7 +378,7 @@ class TenancyChequeBase(BaseModel):
     cheque_number: Optional[str] = None  # Required only for cheques
     bank_name: Optional[str] = None  # Required only for cheques
     reference_number: Optional[str] = None  # For bank transfers
-    status: Literal['pending', 'deposited', 'cleared', 'bounced'] = 'pending'
+    status: Literal['pending', 'deposited', 'cleared', 'bounced', 'cancelled', 'replaced'] = 'pending'
     deposited_date: Optional[date] = None
     cleared_date: Optional[date] = None
     bounce_reason: Optional[str] = None
@@ -394,7 +394,7 @@ class TenancyChequeUpdate(BaseModel):
     reference_number: Optional[str] = None
     amount: Optional[Decimal] = None
     due_date: Optional[date] = None
-    status: Optional[Literal['pending', 'deposited', 'cleared', 'bounced']] = None
+    status: Optional[Literal['pending', 'deposited', 'cleared', 'bounced', 'cancelled', 'replaced']] = None
     deposited_date: Optional[date] = None
     cleared_date: Optional[date] = None
     bounce_reason: Optional[str] = None
@@ -497,6 +497,10 @@ class TenancyResponse(TenancyBase):
     previous_tenancy_id: Optional[UUID] = None
     termination_date: Optional[date] = None
     termination_reason: Optional[str] = None
+    charge_penalty: bool = False
+    penalty_amount: Decimal = Decimal("0")
+    refund_amount: Decimal = Decimal("0")
+    balance_due_amount: Decimal = Decimal("0")
     created_at: datetime
     updated_at: datetime
 
@@ -516,6 +520,31 @@ class TenancyWithDetails(TenancyResponse):
 class TenancyTerminate(BaseModel):
     termination_date: date
     termination_reason: str
+    charge_penalty: bool = False
+
+
+class TenancyTerminationPreview(BaseModel):
+    termination_date: date
+    charge_penalty: bool = False
+
+
+class TenancyTerminationResult(BaseModel):
+    """Early-termination settlement breakdown."""
+    per_day_rent: Decimal
+    days_occupied: int
+    rent_for_occupancy: Decimal
+    charge_penalty: bool
+    penalty_amount: Decimal
+    collected: Decimal
+    refund_amount: Decimal        # Paid back to tenant (>= 0)
+    balance_due_amount: Decimal   # Still owed by tenant (>= 0)
+    cheques_voided: int
+
+
+class TenancyTerminateResponse(BaseModel):
+    """Returned by the terminate endpoint: updated tenancy + settlement."""
+    tenancy: TenancyResponse
+    settlement: TenancyTerminationResult
 
 class TenancyRenew(BaseModel):
     contract_start: date

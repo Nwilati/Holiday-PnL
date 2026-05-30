@@ -3,7 +3,7 @@ import {
   BookOpen, Search,
   FileText, CheckCircle, XCircle, RotateCcw, Eye, X
 } from 'lucide-react';
-import api from '../api/client';
+import api, { type IncomeStatementResponse } from '../api/client';
 
 interface Account {
   id: string;
@@ -57,8 +57,10 @@ interface TrialBalance {
   is_balanced: boolean;
 }
 
+type AccountingTab = 'coa' | 'journals' | 'trial-balance' | 'income-statement';
+
 export default function Accounting() {
-  const [activeTab, setActiveTab] = useState<'coa' | 'journals' | 'trial-balance'>('coa');
+  const [activeTab, setActiveTab] = useState<AccountingTab>('coa');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [journals, setJournals] = useState<JournalEntry[]>([]);
   const [trialBalance, setTrialBalance] = useState<TrialBalance | null>(null);
@@ -67,9 +69,53 @@ export default function Accounting() {
   const [selectedJournal, setSelectedJournal] = useState<JournalEntry | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Income Statement (P&L) tab state
+  const todayStr = new Date().toISOString().split('T')[0];
+  const yearStartStr = `${new Date().getFullYear()}-01-01`;
+  const [incomeStatement, setIncomeStatement] = useState<IncomeStatementResponse | null>(null);
+  const [plStart, setPlStart] = useState(yearStartStr);
+  const [plEnd, setPlEnd] = useState(todayStr);
+  const [plProperty, setPlProperty] = useState('');
+  const [plLoading, setPlLoading] = useState(false);
+  const [properties, setProperties] = useState<{ id: string; name: string }[]>([]);
+  const [backfilling, setBackfilling] = useState(false);
+
   useEffect(() => {
     loadData();
   }, [activeTab]);
+
+  // Load properties once for the P&L property filter
+  useEffect(() => {
+    api.getProperties().then((res) => setProperties(res.data)).catch(() => {});
+  }, []);
+
+  // Fetch the income statement when its tab is active or its filters change
+  useEffect(() => {
+    if (activeTab !== 'income-statement') return;
+    setPlLoading(true);
+    api
+      .getIncomeStatement({ start_date: plStart, end_date: plEnd, property_id: plProperty || undefined })
+      .then((res) => setIncomeStatement(res.data))
+      .catch(() => setIncomeStatement(null))
+      .finally(() => setPlLoading(false));
+  }, [activeTab, plStart, plEnd, plProperty]);
+
+  const runBackfill = async () => {
+    if (!confirm('Generate ledger entries for all cleared tenancy payments and terminations? Safe to re-run.')) return;
+    setBackfilling(true);
+    try {
+      const res = await api.backfillTenancyJournals();
+      alert(`Backfill complete: ${res.data.created} posted, ${res.data.skipped} skipped.`);
+      if (activeTab === 'income-statement') {
+        const r = await api.getIncomeStatement({ start_date: plStart, end_date: plEnd, property_id: plProperty || undefined });
+        setIncomeStatement(r.data);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Backfill failed');
+    } finally {
+      setBackfilling(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -134,6 +180,7 @@ export default function Accounting() {
     liability: 'bg-red-50 text-red-700',
     equity: 'bg-stone-100 text-stone-600',
     revenue: 'bg-green-50 text-green-700',
+    income: 'bg-green-50 text-green-700',
     expense: 'bg-amber-50 text-amber-700'
   };
 
@@ -141,6 +188,8 @@ export default function Accounting() {
     booking: 'bg-sky-50 text-sky-700',
     expense: 'bg-amber-50 text-amber-700',
     tenancy: 'bg-sky-50 text-sky-700',
+    tenancy_payment: 'bg-green-50 text-green-700',
+    tenancy_termination: 'bg-red-50 text-red-700',
     manual: 'bg-stone-100 text-stone-600',
     adjustment: 'bg-amber-50 text-amber-700'
   };
@@ -177,11 +226,12 @@ export default function Accounting() {
           {[
             { id: 'coa', label: 'Chart of Accounts', icon: BookOpen },
             { id: 'journals', label: 'Journal Entries', icon: FileText },
-            { id: 'trial-balance', label: 'Trial Balance', icon: FileText }
+            { id: 'trial-balance', label: 'Trial Balance', icon: FileText },
+            { id: 'income-statement', label: 'Income Statement', icon: FileText }
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as 'coa' | 'journals' | 'trial-balance')}
+              onClick={() => setActiveTab(tab.id as AccountingTab)}
               className={`flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'border-sky-600 text-sky-600'
@@ -455,6 +505,99 @@ export default function Accounting() {
                   </table>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Income Statement (P&L) */}
+          {activeTab === 'income-statement' && (
+            <div className="space-y-4">
+              {/* Filters */}
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-stone-500 mb-1">From</label>
+                  <input type="date" value={plStart} onChange={(e) => setPlStart(e.target.value)}
+                    className="px-3 py-1.5 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-stone-500 mb-1">To</label>
+                  <input type="date" value={plEnd} onChange={(e) => setPlEnd(e.target.value)}
+                    className="px-3 py-1.5 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-stone-500 mb-1">Property</label>
+                  <select value={plProperty} onChange={(e) => setPlProperty(e.target.value)}
+                    className="px-3 py-1.5 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-sky-500">
+                    <option value="">All properties</option>
+                    {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <button onClick={runBackfill} disabled={backfilling}
+                  className="ml-auto px-3 py-1.5 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded disabled:opacity-50"
+                  title="Post ledger entries for all cleared tenancy payments and terminations (idempotent)">
+                  {backfilling ? 'Backfilling…' : 'Backfill tenancy ledger'}
+                </button>
+              </div>
+
+              {plLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
+                </div>
+              ) : incomeStatement ? (
+                <div className="bg-white border border-stone-200 rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <tbody className="divide-y divide-stone-100">
+                      <tr className="bg-stone-50">
+                        <td colSpan={2} className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">Revenue</td>
+                      </tr>
+                      {incomeStatement.revenue.length === 0 ? (
+                        <tr><td colSpan={2} className="px-4 py-2.5 text-sm text-stone-400">No revenue in this period</td></tr>
+                      ) : incomeStatement.revenue.map((l, i) => (
+                        <tr key={`r${i}`} className="hover:bg-stone-50">
+                          <td className="px-4 py-2.5 text-sm text-stone-800">
+                            <span className="font-mono text-stone-400 mr-2">{l.account_code}</span>{l.account_name}
+                          </td>
+                          <td className="px-4 py-2.5 text-sm text-right font-mono tabular-nums text-green-700">AED {formatCurrency(l.amount)}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-stone-50 font-semibold">
+                        <td className="px-4 py-2 text-sm text-stone-700">Total Revenue</td>
+                        <td className="px-4 py-2 text-sm text-right font-mono tabular-nums text-green-700">AED {formatCurrency(incomeStatement.total_revenue)}</td>
+                      </tr>
+
+                      <tr className="bg-stone-50">
+                        <td colSpan={2} className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">Expenses</td>
+                      </tr>
+                      {incomeStatement.expenses.length === 0 ? (
+                        <tr><td colSpan={2} className="px-4 py-2.5 text-sm text-stone-400">No expenses in this period</td></tr>
+                      ) : incomeStatement.expenses.map((l, i) => (
+                        <tr key={`e${i}`} className="hover:bg-stone-50">
+                          <td className="px-4 py-2.5 text-sm text-stone-800">
+                            <span className="font-mono text-stone-400 mr-2">{l.account_code}</span>{l.account_name}
+                          </td>
+                          <td className="px-4 py-2.5 text-sm text-right font-mono tabular-nums text-amber-700">AED {formatCurrency(l.amount)}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-stone-50 font-semibold">
+                        <td className="px-4 py-2 text-sm text-stone-700">Total Expenses</td>
+                        <td className="px-4 py-2 text-sm text-right font-mono tabular-nums text-amber-700">AED {formatCurrency(incomeStatement.total_expenses)}</td>
+                      </tr>
+                    </tbody>
+                    <tfoot className="bg-stone-100 border-t-2 border-stone-300">
+                      <tr>
+                        <td className="px-4 py-3 font-bold text-stone-900">NET PROFIT</td>
+                        <td className={`px-4 py-3 text-right font-mono font-bold tabular-nums ${incomeStatement.net_profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                          AED {formatCurrency(incomeStatement.net_profit)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              ) : (
+                <div className="bg-white border border-stone-200 rounded-lg p-12 text-center">
+                  <FileText className="w-12 h-12 text-stone-300 mx-auto mb-4" />
+                  <p className="text-stone-500">No data for this period.</p>
+                </div>
+              )}
             </div>
           )}
         </>

@@ -136,3 +136,19 @@ class TrialBalanceResponse(BaseModel):
     total_debits: Decimal
     total_credits: Decimal
     is_balanced: bool
+
+
+class IncomeStatementLine(BaseModel):
+    account_code: str
+    account_name: str
+    amount: Decimal
+
+
+class IncomeStatementResponse(BaseModel):
+    start_date: date
+    end_date: date
+    revenue: List[IncomeStatementLine]
+    expenses: List[IncomeStatementLine]
+    total_revenue: Decimal
+    total_expenses: Decimal
+    net_profit: Decimal

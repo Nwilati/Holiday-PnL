@@ -22,6 +22,16 @@ app.add_middleware(
 @app.on_event("startup")
 def run_migrations():
     """Run lightweight schema migrations on startup"""
+    # Ensure the cheque_status enum has the values used by early-termination
+    # voiding. ALTER TYPE ... ADD VALUE must run outside a transaction block on
+    # some Postgres versions, so do it on an AUTOCOMMIT connection by itself.
+    try:
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            conn.execute(text("ALTER TYPE cheque_status ADD VALUE IF NOT EXISTS 'cancelled'"))
+            conn.execute(text("ALTER TYPE cheque_status ADD VALUE IF NOT EXISTS 'replaced'"))
+    except Exception as e:
+        print(f"Warning: cheque_status enum migration failed (may already be applied): {e}")
+
     try:
         with engine.connect() as conn:
             # Add invoice_number column to expenses if not exists
@@ -37,6 +47,17 @@ def run_migrations():
             # Add deposit_status column to tenancies if not exists
             conn.execute(text("""
                 ALTER TABLE tenancies ADD COLUMN IF NOT EXISTS deposit_status VARCHAR(20) DEFAULT 'pending'
+            """))
+            # Early-termination settlement columns on tenancies
+            conn.execute(text("ALTER TABLE tenancies ADD COLUMN IF NOT EXISTS charge_penalty BOOLEAN DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE tenancies ADD COLUMN IF NOT EXISTS penalty_amount NUMERIC(12, 2) DEFAULT 0"))
+            conn.execute(text("ALTER TABLE tenancies ADD COLUMN IF NOT EXISTS refund_amount NUMERIC(12, 2) DEFAULT 0"))
+            conn.execute(text("ALTER TABLE tenancies ADD COLUMN IF NOT EXISTS balance_due_amount NUMERIC(12, 2) DEFAULT 0"))
+            # Early Termination Penalty income account (under Other Income 4300)
+            conn.execute(text("""
+                INSERT INTO accounts (id, code, name, account_type, parent_code, is_active)
+                VALUES (gen_random_uuid(), '4303', 'Early Termination Penalty', 'income', '4300', TRUE)
+                ON CONFLICT (code) DO NOTHING
             """))
             # Ensure deposit_transactions table exists
             conn.execute(text("""
