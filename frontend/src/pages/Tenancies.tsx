@@ -1859,7 +1859,7 @@ export default function Tenancies() {
                   ) : terminationPreview ? (
                     <div className="space-y-1.5 text-sm">
                       <div className="flex justify-between text-stone-600">
-                        <span>Per-day rent (annual ÷ 360)</span>
+                        <span>Per-day rent (annual ÷ 365)</span>
                         <span>AED {formatCurrency(terminationPreview.per_day_rent)}</span>
                       </div>
                       <div className="flex justify-between text-stone-600">

@@ -825,9 +825,9 @@ def calculate_termination_settlement(db: Session, tenancy, termination_date: dat
     """Compute the early-termination settlement for a tenancy. Single source of
     truth for both the preview/terminate endpoints and the ledger journal.
 
-      per_day_rent        = annual_rent / 360
+      per_day_rent        = annual_rent / 365
       days_occupied       = (termination_date - contract_start) + 1  (inclusive)
-      rent_for_occupancy  = annual_rent * days / 360
+      rent_for_occupancy  = annual_rent * days / 365
       penalty             = annual_rent / 12  (one month) when charge_penalty
       collected           = ALL rent actually received (every cleared/deposited
                             cheque, any due date — incl. prepaid future cheques;
@@ -837,13 +837,13 @@ def calculate_termination_settlement(db: Session, tenancy, termination_date: dat
                             >= 0 -> refund to tenant ; < 0 -> balance due from tenant
     """
     annual_rent = Decimal(str(tenancy.annual_rent or 0))
-    per_day_rent = _money(annual_rent / Decimal('360'))
+    per_day_rent = _money(annual_rent / Decimal('365'))
 
     days_occupied = (termination_date - tenancy.contract_start).days + 1
     if days_occupied < 0:
         days_occupied = 0
 
-    rent_for_occupancy = _money(annual_rent * Decimal(days_occupied) / Decimal('360'))
+    rent_for_occupancy = _money(annual_rent * Decimal(days_occupied) / Decimal('365'))
     penalty = _money(annual_rent / Decimal('12')) if charge_penalty else Decimal('0.00')
 
     # All rent actually received (any due date) — prepaid cheques dated after the
