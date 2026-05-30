@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Banknote,
   Eye,
+  Calculator,
 } from 'lucide-react';
 import { api } from '../api/client';
 import type { DepositTransaction } from '../api/client';
@@ -578,6 +579,26 @@ export default function Tenancies() {
     }
   };
 
+  const handleRecalculate = async (tenancy: Tenancy, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Recalculate the exit settlement for ${tenancy.tenant_name}?\n\nThis rebuilds the refund as a PENDING payout (cleared when you pay it) and includes the security deposit. Any previously posted settlement is reversed.`)) return;
+    try {
+      const res = await api.recalculateSettlement(tenancy.id);
+      const s = res.data.settlement;
+      const fmt = (n: number) => `AED ${formatCurrency(n)}`;
+      const msg = s.refund_amount > 0
+        ? `Refund to tenant: ${fmt(s.refund_amount)} (pending)${s.deposit_amount > 0 ? ` — incl. deposit ${fmt(s.deposit_amount)}` : ''}.`
+        : s.balance_due_amount > 0
+        ? `Balance due from tenant: ${fmt(s.balance_due_amount)} (pending).`
+        : 'Settled (AED 0).';
+      alert(`Settlement recalculated.\n${msg}`);
+      loadTenancies();
+    } catch (error: any) {
+      console.error('Failed to recalculate settlement:', error);
+      alert(error.response?.data?.detail || 'Failed to recalculate settlement.');
+    }
+  };
+
   const handleDelete = (tenancy: Tenancy, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedTenancy(tenancy);
@@ -972,6 +993,15 @@ export default function Tenancies() {
                             <XCircle className="w-4 h-4" />
                           </button>
                         </>
+                      )}
+                      {tenancy.status === 'terminated' && (
+                        <button
+                          onClick={(e) => handleRecalculate(tenancy, e)}
+                          className="p-1 text-stone-400 hover:text-sky-600"
+                          title="Recalculate settlement (pending refund + deposit)"
+                        >
+                          <Calculator className="w-4 h-4" />
+                        </button>
                       )}
                       <button
                         onClick={(e) => handleDelete(tenancy, e)}

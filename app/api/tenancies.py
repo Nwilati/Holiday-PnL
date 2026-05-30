@@ -7,7 +7,10 @@ from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal, ROUND_HALF_UP
 from app.core.database import get_db
-from app.models.models import Tenancy, TenancyCheque, TenancyDocument, Property, CalendarBlock
+from app.models.models import (
+    Tenancy, TenancyCheque, TenancyDocument, Property, CalendarBlock,
+    JournalEntry, DepositTransaction
+)
 from app.schemas.schemas import (
     TenancyCreate, TenancyUpdate, TenancyResponse, TenancyWithDetails,
     TenancyChequeCreate, TenancyChequeUpdate, TenancyChequeResponse,
@@ -21,6 +24,7 @@ from app.api.accounting import (
     calculate_termination_settlement,
     generate_tenancy_payment_journal, generate_tenancy_termination_journal
 )
+from app.api.deposits import calculate_deposit_status
 
 router = APIRouter(prefix="/tenancies", tags=["Tenancies"])
 
@@ -595,6 +599,94 @@ def terminate_tenancy(tenancy_id: UUID, data: TenancyTerminate, db: Session = De
     # only when the pending refund / balance-due line is cleared (paid), so cash
     # movement is recognised on the actual eviction/payment date.
 
+    return TenancyTerminateResponse(
+        tenancy=TenancyResponse.model_validate(tenancy),
+        settlement=TenancyTerminationResult(**settlement),
+    )
+
+
+@router.post("/{tenancy_id}/recalculate-settlement", response_model=TenancyTerminateResponse)
+def recalculate_settlement(tenancy_id: UUID, db: Session = Depends(get_db)):
+    """Re-run the early-termination settlement for an already-terminated tenancy
+    using the current rules (pending refund, deposit included). Undoes any prior
+    settlement journal/lines and rebuilds a fresh PENDING settlement line. Useful
+    for tenancies terminated under older logic."""
+    tenancy = db.query(Tenancy).filter(Tenancy.id == tenancy_id).first()
+    if not tenancy:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenancy not found")
+    if str(tenancy.status) != 'terminated' or not tenancy.termination_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only terminated tenancies can be recalculated"
+        )
+
+    # 1. Undo any existing termination journal + its linked deposit transactions
+    existing_je = db.query(JournalEntry).filter(
+        JournalEntry.source == 'tenancy_termination',
+        JournalEntry.source_id == tenancy_id
+    ).first()
+    if existing_je:
+        db.query(DepositTransaction).filter(
+            DepositTransaction.journal_entry_id == existing_je.id
+        ).delete()
+        db.execute(text("DELETE FROM journal_entries WHERE id = :id"), {'id': existing_je.id})
+
+    # 2. Remove old synthetic settlement lines
+    db.execute(text("""
+        DELETE FROM tenancy_cheques
+        WHERE tenancy_id = :id AND COALESCE(payment_method, '') IN ('refund', 'balance_due')
+    """), {'id': tenancy_id})
+
+    # 3. Recompute with current rules (deposit included)
+    settlement = calculate_termination_settlement(
+        db, tenancy, tenancy.termination_date, bool(tenancy.charge_penalty)
+    )
+
+    # 4. Reset deposit status (its refund, if any, was undone above)
+    new_deposit_status = calculate_deposit_status(db, tenancy_id, tenancy.security_deposit or Decimal('0'))
+
+    db.execute(text("""
+        UPDATE tenancies
+        SET penalty_amount = :penalty_amount,
+            refund_amount = :refund_amount,
+            balance_due_amount = :balance_due_amount,
+            deposit_status = :deposit_status,
+            updated_at = NOW()
+        WHERE id = :id
+    """), {
+        'id': tenancy_id,
+        'penalty_amount': settlement['penalty_amount'],
+        'refund_amount': settlement['refund_amount'],
+        'balance_due_amount': settlement['balance_due_amount'],
+        'deposit_status': new_deposit_status,
+    })
+
+    # 5. Create a fresh PENDING settlement line
+    deposit_note = (
+        f" (incl. deposit AED {settlement['deposit_amount']})"
+        if settlement['deposit_amount'] > 0 else ""
+    )
+    if settlement['refund_amount'] > 0:
+        db.execute(text("""
+            INSERT INTO tenancy_cheques (id, tenancy_id, payment_method, amount, due_date, status, notes)
+            VALUES (:id, :tenancy_id, 'refund', :amount, :due_date, CAST('pending' AS cheque_status), :notes)
+        """), {
+            'id': uuid4(), 'tenancy_id': tenancy_id,
+            'amount': -settlement['refund_amount'], 'due_date': tenancy.termination_date,
+            'notes': f"Early termination refund (pending payout){deposit_note}",
+        })
+    elif settlement['balance_due_amount'] > 0:
+        db.execute(text("""
+            INSERT INTO tenancy_cheques (id, tenancy_id, payment_method, amount, due_date, status, notes)
+            VALUES (:id, :tenancy_id, 'balance_due', :amount, :due_date, CAST('pending' AS cheque_status), :notes)
+        """), {
+            'id': uuid4(), 'tenancy_id': tenancy_id,
+            'amount': settlement['balance_due_amount'], 'due_date': tenancy.termination_date,
+            'notes': f"Early termination balance due{deposit_note}",
+        })
+
+    db.commit()
+    db.refresh(tenancy)
     return TenancyTerminateResponse(
         tenancy=TenancyResponse.model_validate(tenancy),
         settlement=TenancyTerminationResult(**settlement),
