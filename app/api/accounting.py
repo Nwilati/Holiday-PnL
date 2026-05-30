@@ -829,8 +829,9 @@ def calculate_termination_settlement(db: Session, tenancy, termination_date: dat
       days_occupied       = (termination_date - contract_start) + 1  (inclusive)
       rent_for_occupancy  = annual_rent * days / 360
       penalty             = annual_rent / 12  (one month) when charge_penalty
-      collected           = real rent cheques (cleared/deposited) due <= exit
-                            (excludes synthetic refund/balance_due settlement lines)
+      collected           = ALL rent actually received (every cleared/deposited
+                            cheque, any due date — incl. prepaid future cheques;
+                            excludes synthetic refund/balance_due settlement lines)
       deposit_amount      = tenancy.security_deposit (returned to tenant)
       settlement          = collected - rent_for_occupancy - penalty + deposit
                             >= 0 -> refund to tenant ; < 0 -> balance due from tenant
@@ -845,14 +846,15 @@ def calculate_termination_settlement(db: Session, tenancy, termination_date: dat
     rent_for_occupancy = _money(annual_rent * Decimal(days_occupied) / Decimal('360'))
     penalty = _money(annual_rent / Decimal('12')) if charge_penalty else Decimal('0.00')
 
+    # All rent actually received (any due date) — prepaid cheques dated after the
+    # exit are real money in hand and must be counted so the unused portion is refunded.
     collected = db.execute(text("""
         SELECT COALESCE(SUM(amount), 0)
         FROM tenancy_cheques
         WHERE tenancy_id = :id
           AND status IN ('cleared', 'deposited')
-          AND due_date <= :termination_date
           AND COALESCE(payment_method, '') NOT IN ('refund', 'balance_due')
-    """), {'id': tenancy.id, 'termination_date': termination_date}).scalar() or Decimal('0')
+    """), {'id': tenancy.id}).scalar() or Decimal('0')
     collected = _money(Decimal(str(collected)))
 
     deposit_amount = _money(Decimal(str(tenancy.security_deposit or 0)))
@@ -870,7 +872,7 @@ def calculate_termination_settlement(db: Session, tenancy, termination_date: dat
         FROM tenancy_cheques
         WHERE tenancy_id = :id
           AND due_date > :termination_date
-          AND status IN ('pending', 'deposited')
+          AND status = 'pending'
     """), {'id': tenancy.id, 'termination_date': termination_date}).scalar() or 0
 
     return {

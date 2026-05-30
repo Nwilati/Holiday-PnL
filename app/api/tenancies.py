@@ -542,7 +542,7 @@ def terminate_tenancy(tenancy_id: UUID, data: TenancyTerminate, db: Session = De
             updated_at = NOW()
         WHERE tenancy_id = :id
           AND due_date > :termination_date
-          AND status IN ('pending', 'deposited')
+          AND status = 'pending'
     """), {'id': tenancy_id, 'termination_date': data.termination_date})
 
     # Record the settlement as a PENDING line in the cheque/revenue layer. It is
