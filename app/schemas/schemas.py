@@ -536,7 +536,8 @@ class TenancyTerminationResult(BaseModel):
     charge_penalty: bool
     penalty_amount: Decimal
     collected: Decimal
-    refund_amount: Decimal        # Paid back to tenant (>= 0)
+    deposit_amount: Decimal       # Security deposit returned as part of the settlement
+    refund_amount: Decimal        # Paid back to tenant (>= 0), incl. deposit
     balance_due_amount: Decimal   # Still owed by tenant (>= 0)
     cheques_voided: int
 

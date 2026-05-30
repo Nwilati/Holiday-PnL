@@ -85,6 +85,7 @@ interface TerminationSettlement {
   charge_penalty: boolean;
   penalty_amount: number;
   collected: number;
+  deposit_amount: number;
   refund_amount: number;
   balance_due_amount: number;
   cheques_voided: number;
@@ -1846,6 +1847,12 @@ export default function Tenancies() {
                         <span>Collected (cleared + deposited)</span>
                         <span>AED {formatCurrency(terminationPreview.collected)}</span>
                       </div>
+                      {terminationPreview.deposit_amount > 0 && (
+                        <div className="flex justify-between text-stone-600">
+                          <span>Security deposit (returned)</span>
+                          <span>AED {formatCurrency(terminationPreview.deposit_amount)}</span>
+                        </div>
+                      )}
                       {terminationPreview.cheques_voided > 0 && (
                         <div className="flex justify-between text-amber-600">
                           <span>Future cheques to cancel</span>
@@ -1854,15 +1861,25 @@ export default function Tenancies() {
                       )}
                       <div className="border-t border-stone-200 my-1.5" />
                       {terminationPreview.refund_amount > 0 ? (
-                        <div className="flex justify-between font-semibold text-emerald-700">
-                          <span>Refund to tenant</span>
-                          <span>AED {formatCurrency(terminationPreview.refund_amount)}</span>
-                        </div>
+                        <>
+                          <div className="flex justify-between font-semibold text-emerald-700">
+                            <span>Refund to tenant</span>
+                            <span>AED {formatCurrency(terminationPreview.refund_amount)}</span>
+                          </div>
+                          <p className="text-xs text-stone-500 mt-1">
+                            Recorded as a <strong>pending</strong> payout — mark it cleared when you pay it on the eviction date; only then does it post to the ledger.
+                          </p>
+                        </>
                       ) : terminationPreview.balance_due_amount > 0 ? (
-                        <div className="flex justify-between font-semibold text-red-700">
-                          <span>Balance due from tenant</span>
-                          <span>AED {formatCurrency(terminationPreview.balance_due_amount)}</span>
-                        </div>
+                        <>
+                          <div className="flex justify-between font-semibold text-red-700">
+                            <span>Balance due from tenant</span>
+                            <span>AED {formatCurrency(terminationPreview.balance_due_amount)}</span>
+                          </div>
+                          <p className="text-xs text-stone-500 mt-1">
+                            Recorded as <strong>pending</strong> — posts to the ledger when collected.
+                          </p>
+                        </>
                       ) : (
                         <div className="flex justify-between font-semibold text-stone-700">
                           <span>Settled</span>

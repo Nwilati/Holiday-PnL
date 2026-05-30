@@ -18,6 +18,7 @@ from app.schemas.schemas import (
     AnnualRevenueResponse
 )
 from app.api.accounting import (
+    calculate_termination_settlement,
     generate_tenancy_payment_journal, generate_tenancy_termination_journal
 )
 
@@ -96,81 +97,20 @@ def remove_calendar_block_for_tenancy(db: Session, tenancy_id: UUID):
     db.execute(sql, {'pattern': f'%{tenancy_id}%'})
 
 
-def _money(value: Decimal) -> Decimal:
-    """Round a monetary amount to 2 decimal places."""
-    return Decimal(value).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+def _post_cheque_clear_journal(db: Session, cheque_id: UUID):
+    """Route a just-cleared tenancy cheque to the correct ledger journal.
 
-
-def calculate_termination_settlement(
-    db: Session,
-    tenancy: Tenancy,
-    termination_date: date,
-    charge_penalty: bool
-) -> dict:
-    """Compute the early-termination settlement for a tenancy.
-
-    Rules (UAE early-exit settlement):
-      * per_day_rent      = annual_rent / 360
-      * days_occupied     = (termination_date - contract_start) + 1  (inclusive of exit day)
-      * rent_for_occupancy = per_day_rent * days_occupied
-      * penalty           = annual_rent / 12  (one month) when charge_penalty is True
-      * collected         = cheques cleared/deposited with due_date <= termination_date
-      * settlement        = collected - rent_for_occupancy - penalty
-                            >= 0 -> refund to tenant ; < 0 -> balance due from tenant
-      * cheques_voided    = pending/deposited cheques due AFTER termination_date
-
-    Returns a dict matching TenancyTerminationResult.
+    Synthetic early-termination settlement lines (refund / balance_due) trigger
+    the combined termination journal (rent + penalty + deposit); ordinary rent
+    payments post a simple Dr Bank / Cr Rent Revenue entry.
     """
-    annual_rent = Decimal(str(tenancy.annual_rent or 0))
-
-    # per_day_rent is reported for transparency; occupancy rent is computed from the
-    # unrounded division to avoid per-day rounding drift over many days.
-    per_day_rent = _money(annual_rent / Decimal('360'))
-
-    # Inclusive day count; clamp at 0 in case of an exit date before contract start.
-    days_occupied = (termination_date - tenancy.contract_start).days + 1
-    if days_occupied < 0:
-        days_occupied = 0
-
-    rent_for_occupancy = _money(annual_rent * Decimal(days_occupied) / Decimal('360'))
-    penalty = _money(annual_rent / Decimal('12')) if charge_penalty else Decimal('0.00')
-
-    collected = db.execute(text("""
-        SELECT COALESCE(SUM(amount), 0)
-        FROM tenancy_cheques
-        WHERE tenancy_id = :id
-          AND status IN ('cleared', 'deposited')
-          AND due_date <= :termination_date
-    """), {'id': tenancy.id, 'termination_date': termination_date}).scalar() or Decimal('0')
-    collected = _money(Decimal(str(collected)))
-
-    settlement = collected - rent_for_occupancy - penalty
-    if settlement >= 0:
-        refund_amount = _money(settlement)
-        balance_due_amount = Decimal('0.00')
+    cheque = db.query(TenancyCheque).filter(TenancyCheque.id == cheque_id).first()
+    if not cheque:
+        return
+    if (cheque.payment_method or '') in ('refund', 'balance_due'):
+        generate_tenancy_termination_journal(db, cheque.tenancy_id)
     else:
-        refund_amount = Decimal('0.00')
-        balance_due_amount = _money(-settlement)
-
-    cheques_voided = db.execute(text("""
-        SELECT COUNT(*)
-        FROM tenancy_cheques
-        WHERE tenancy_id = :id
-          AND due_date > :termination_date
-          AND status IN ('pending', 'deposited')
-    """), {'id': tenancy.id, 'termination_date': termination_date}).scalar() or 0
-
-    return {
-        'per_day_rent': per_day_rent,
-        'days_occupied': days_occupied,
-        'rent_for_occupancy': rent_for_occupancy,
-        'charge_penalty': charge_penalty,
-        'penalty_amount': penalty,
-        'collected': collected,
-        'refund_amount': refund_amount,
-        'balance_due_amount': balance_due_amount,
-        'cheques_voided': int(cheques_voided),
-    }
+        _post_cheque_clear_journal(db, cheque_id)
 
 
 # ============================================================================
@@ -601,12 +541,14 @@ def terminate_tenancy(tenancy_id: UUID, data: TenancyTerminate, db: Session = De
           AND status IN ('pending', 'deposited')
     """), {'id': tenancy_id, 'termination_date': data.termination_date})
 
-    # Record the net settlement line in the cheque/revenue layer so financial
-    # reports reflect it. The penalty is embedded in the net (collected - refund
-    # = rent + penalty), so we add a single line rather than a separate penalty line.
-    penalty_note = (
-        f" (incl. penalty AED {settlement['penalty_amount']})"
-        if data.charge_penalty else ""
+    # Record the settlement as a PENDING line in the cheque/revenue layer. It is
+    # NOT cleared yet — the money moves on the eviction/payment date. When this
+    # line is later marked cleared, the ledger journal (rent reversal + penalty +
+    # deposit release) is posted (see the cheque-clear hooks). The refund amount
+    # already includes the security deposit and nets the penalty.
+    deposit_note = (
+        f" (incl. deposit AED {settlement['deposit_amount']})"
+        if settlement['deposit_amount'] > 0 else ""
     )
     if settlement['refund_amount'] > 0:
         db.execute(text("""
@@ -614,14 +556,14 @@ def terminate_tenancy(tenancy_id: UUID, data: TenancyTerminate, db: Session = De
                 id, tenancy_id, payment_method, amount, due_date, status, notes
             ) VALUES (
                 :id, :tenancy_id, 'refund', :amount, :due_date,
-                CAST('cleared' AS cheque_status), :notes
+                CAST('pending' AS cheque_status), :notes
             )
         """), {
             'id': uuid4(),
             'tenancy_id': tenancy_id,
             'amount': -settlement['refund_amount'],
             'due_date': data.termination_date,
-            'notes': f"Early termination refund{penalty_note}",
+            'notes': f"Early termination refund (pending payout){deposit_note}",
         })
     elif settlement['balance_due_amount'] > 0:
         db.execute(text("""
@@ -636,7 +578,7 @@ def terminate_tenancy(tenancy_id: UUID, data: TenancyTerminate, db: Session = De
             'tenancy_id': tenancy_id,
             'amount': settlement['balance_due_amount'],
             'due_date': data.termination_date,
-            'notes': f"Early termination balance due{penalty_note}",
+            'notes': f"Early termination balance due{deposit_note}",
         })
 
     # Update calendar block to reflect termination date
@@ -649,11 +591,9 @@ def terminate_tenancy(tenancy_id: UUID, data: TenancyTerminate, db: Session = De
     db.commit()
     db.refresh(tenancy)
 
-    # Post the settlement to the accounting ledger (refund + penalty).
-    try:
-        generate_tenancy_termination_journal(db, tenancy_id)
-    except Exception as e:
-        print(f"Warning: could not generate termination journal for tenancy {tenancy_id}: {e}")
+    # NOTE: no ledger journal is posted here. The settlement posts to the ledger
+    # only when the pending refund / balance-due line is cleared (paid), so cash
+    # movement is recognised on the actual eviction/payment date.
 
     return TenancyTerminateResponse(
         tenancy=TenancyResponse.model_validate(tenancy),
@@ -895,7 +835,7 @@ def update_cheque(
     # If this edit cleared the cheque, auto-post it to the ledger (idempotent).
     if update_data.get('status') == 'cleared':
         try:
-            generate_tenancy_payment_journal(db, cheque_id)
+            _post_cheque_clear_journal(db, cheque_id)
         except Exception as e:
             print(f"Warning: could not generate tenancy payment journal for cheque {cheque_id}: {e}")
 
@@ -962,7 +902,7 @@ def clear_cheque(tenancy_id: UUID, cheque_id: UUID, db: Session = Depends(get_db
 
     # Auto-post the cleared rent payment to the accounting ledger.
     try:
-        generate_tenancy_payment_journal(db, cheque_id)
+        _post_cheque_clear_journal(db, cheque_id)
     except Exception as e:
         print(f"Warning: could not generate tenancy payment journal for cheque {cheque_id}: {e}")
 
@@ -1074,7 +1014,7 @@ def clear_cheque_direct(
 
     # Auto-post the cleared rent payment to the accounting ledger.
     try:
-        generate_tenancy_payment_journal(db, cheque_id)
+        _post_cheque_clear_journal(db, cheque_id)
     except Exception as e:
         print(f"Warning: could not generate tenancy payment journal for cheque {cheque_id}: {e}")
 

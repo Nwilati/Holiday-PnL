@@ -98,6 +98,7 @@ export interface TenancyTerminationResult {
   charge_penalty: boolean;
   penalty_amount: number;
   collected: number;
+  deposit_amount: number;
   refund_amount: number;
   balance_due_amount: number;
   cheques_voided: number;

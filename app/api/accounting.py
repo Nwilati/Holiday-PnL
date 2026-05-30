@@ -4,12 +4,12 @@ from sqlalchemy import text, func
 from typing import List, Optional, Any
 from uuid import UUID, uuid4
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from app.core.database import get_db
 from app.models.models import (
     Account, JournalEntry, JournalLine, Booking, Expense, ExpenseCategory,
-    Property, Channel, Tenancy, TenancyCheque
+    Property, Channel, Tenancy, TenancyCheque, DepositTransaction
 )
 from app.schemas.accounting_schemas import (
     AccountCreate, AccountUpdate, AccountResponse,
@@ -816,6 +816,77 @@ def _post_journal(db: Session, entry_date: date, source: str, source_id: UUID,
     return entry
 
 
+def _money(value) -> Decimal:
+    """Round a monetary amount to 2 decimal places."""
+    return Decimal(value).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
+def calculate_termination_settlement(db: Session, tenancy, termination_date: date, charge_penalty: bool) -> dict:
+    """Compute the early-termination settlement for a tenancy. Single source of
+    truth for both the preview/terminate endpoints and the ledger journal.
+
+      per_day_rent        = annual_rent / 360
+      days_occupied       = (termination_date - contract_start) + 1  (inclusive)
+      rent_for_occupancy  = annual_rent * days / 360
+      penalty             = annual_rent / 12  (one month) when charge_penalty
+      collected           = real rent cheques (cleared/deposited) due <= exit
+                            (excludes synthetic refund/balance_due settlement lines)
+      deposit_amount      = tenancy.security_deposit (returned to tenant)
+      settlement          = collected - rent_for_occupancy - penalty + deposit
+                            >= 0 -> refund to tenant ; < 0 -> balance due from tenant
+    """
+    annual_rent = Decimal(str(tenancy.annual_rent or 0))
+    per_day_rent = _money(annual_rent / Decimal('360'))
+
+    days_occupied = (termination_date - tenancy.contract_start).days + 1
+    if days_occupied < 0:
+        days_occupied = 0
+
+    rent_for_occupancy = _money(annual_rent * Decimal(days_occupied) / Decimal('360'))
+    penalty = _money(annual_rent / Decimal('12')) if charge_penalty else Decimal('0.00')
+
+    collected = db.execute(text("""
+        SELECT COALESCE(SUM(amount), 0)
+        FROM tenancy_cheques
+        WHERE tenancy_id = :id
+          AND status IN ('cleared', 'deposited')
+          AND due_date <= :termination_date
+          AND COALESCE(payment_method, '') NOT IN ('refund', 'balance_due')
+    """), {'id': tenancy.id, 'termination_date': termination_date}).scalar() or Decimal('0')
+    collected = _money(Decimal(str(collected)))
+
+    deposit_amount = _money(Decimal(str(tenancy.security_deposit or 0)))
+
+    settlement = collected - rent_for_occupancy - penalty + deposit_amount
+    if settlement >= 0:
+        refund_amount = _money(settlement)
+        balance_due_amount = Decimal('0.00')
+    else:
+        refund_amount = Decimal('0.00')
+        balance_due_amount = _money(-settlement)
+
+    cheques_voided = db.execute(text("""
+        SELECT COUNT(*)
+        FROM tenancy_cheques
+        WHERE tenancy_id = :id
+          AND due_date > :termination_date
+          AND status IN ('pending', 'deposited')
+    """), {'id': tenancy.id, 'termination_date': termination_date}).scalar() or 0
+
+    return {
+        'per_day_rent': per_day_rent,
+        'days_occupied': days_occupied,
+        'rent_for_occupancy': rent_for_occupancy,
+        'charge_penalty': charge_penalty,
+        'penalty_amount': penalty,
+        'collected': collected,
+        'deposit_amount': deposit_amount,
+        'refund_amount': refund_amount,
+        'balance_due_amount': balance_due_amount,
+        'cheques_voided': int(cheques_voided),
+    }
+
+
 def generate_tenancy_payment_journal(db: Session, cheque_id: UUID):
     """Post a cash-basis journal for a cleared tenancy rent payment.
 
@@ -827,8 +898,8 @@ def generate_tenancy_payment_journal(db: Session, cheque_id: UUID):
         return None
     if str(cheque.status) != 'cleared':
         return None
-    # Refund settlement lines are handled by the termination journal, not here.
-    if (cheque.payment_method or '') == 'refund':
+    # Synthetic settlement lines are handled by the termination journal, not here.
+    if (cheque.payment_method or '') in ('refund', 'balance_due'):
         return None
     amount = Decimal(str(cheque.amount or 0))
     if amount <= 0:
@@ -871,23 +942,22 @@ def generate_tenancy_payment_journal(db: Session, cheque_id: UUID):
 
 
 def generate_tenancy_termination_journal(db: Session, tenancy_id: UUID):
-    """Post the early-termination settlement journal for a terminated tenancy.
+    """Post the early-termination settlement journal once the settlement line is
+    paid/cleared. Single balanced entry covering rent, penalty, deposit and cash:
 
-    Dr 4201 Rent Revenue (refund + penalty)  -- reverse over-recognized rent
-    Cr 4303 Early Termination Penalty (penalty, if charged)
-    Cr 1102 Bank (refund paid to tenant)
-    Idempotent (source='tenancy_termination'). Only the refund case posts here;
-    a balance-due case is recognized when that line later clears.
+      Dr 4201 Rent Revenue           = collected - rent_for_occupancy  (reverse over-recognised rent; Cr if negative)
+      Cr 4303 Early Termination Penalty = penalty (if charged)
+      Dr 2302 Tenant Security Deposits  = deposit (release the held deposit)
+      Cr 1102 Bank                   = net refund paid to tenant   (Dr if a balance is collected from them)
+
+    Also records the deposit movement in the deposit ledger (refund if money went
+    back to the tenant, deduction if it was applied to a balance owed) and sets
+    deposit_status. Idempotent (source='tenancy_termination').
     """
     tenancy = db.query(Tenancy).filter(Tenancy.id == tenancy_id).first()
     if not tenancy:
         return None
-    if str(tenancy.status) != 'terminated':
-        return None
-
-    refund = Decimal(str(tenancy.refund_amount or 0))
-    penalty = Decimal(str(tenancy.penalty_amount or 0)) if tenancy.charge_penalty else Decimal('0')
-    if refund <= 0:
+    if str(tenancy.status) != 'terminated' or not tenancy.termination_date:
         return None
 
     exists = db.query(JournalEntry).filter(
@@ -897,27 +967,73 @@ def generate_tenancy_termination_journal(db: Session, tenancy_id: UUID):
     if exists:
         return None
 
+    s = calculate_termination_settlement(
+        db, tenancy, tenancy.termination_date, bool(tenancy.charge_penalty)
+    )
+    collected = s['collected']
+    occupancy = s['rent_for_occupancy']
+    penalty = s['penalty_amount']
+    deposit = s['deposit_amount']
+    net = s['refund_amount'] - s['balance_due_amount']  # >0 paid out, <0 collected in
+
     acc_bank = get_account_by_code(db, '1102')
     acc_rent = get_account_by_code(db, '4201')
 
-    lines = [
-        {'account_id': acc_rent.id, 'debit': refund + penalty, 'credit': Decimal('0'),
-         'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
-         'description': f'Reverse rent on early termination - {tenancy.tenant_name}'},
-    ]
+    lines = []
+    rent_adj = collected - occupancy  # >0 reduce revenue, <0 increase
+    if rent_adj > 0:
+        lines.append({'account_id': acc_rent.id, 'debit': rent_adj, 'credit': Decimal('0'),
+                      'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
+                      'description': f'Reverse unearned rent on early termination - {tenancy.tenant_name}'})
+    elif rent_adj < 0:
+        lines.append({'account_id': acc_rent.id, 'debit': Decimal('0'), 'credit': -rent_adj,
+                      'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
+                      'description': f'Rent earned for occupancy - {tenancy.tenant_name}'})
     if penalty > 0:
-        acc_penalty = get_account_by_code(db, '4303')  # Early Termination Penalty
+        acc_penalty = get_account_by_code(db, '4303')
         lines.append({'account_id': acc_penalty.id, 'debit': Decimal('0'), 'credit': penalty,
                       'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
                       'description': f'Early termination penalty - {tenancy.tenant_name}'})
-    lines.append({'account_id': acc_bank.id, 'debit': Decimal('0'), 'credit': refund,
-                  'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
-                  'description': f'Refund paid to {tenancy.tenant_name}'})
+    if deposit > 0:
+        acc_deposit = get_account_by_code(db, '2302')  # Tenant Security Deposits
+        lines.append({'account_id': acc_deposit.id, 'debit': deposit, 'credit': Decimal('0'),
+                      'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
+                      'description': f'Release security deposit - {tenancy.tenant_name}'})
+    if net > 0:
+        lines.append({'account_id': acc_bank.id, 'debit': Decimal('0'), 'credit': net,
+                      'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
+                      'description': f'Settlement paid to {tenancy.tenant_name}'})
+    elif net < 0:
+        lines.append({'account_id': acc_bank.id, 'debit': -net, 'credit': Decimal('0'),
+                      'property_id': tenancy.property_id, 'tenancy_id': tenancy.id,
+                      'description': f'Balance collected from {tenancy.tenant_name}'})
+
+    if len(lines) < 2:
+        return None  # nothing material to post
 
     entry = _post_journal(
-        db, tenancy.termination_date or date.today(), 'tenancy_termination', tenancy.id,
+        db, tenancy.termination_date, 'tenancy_termination', tenancy.id,
         f"Early termination settlement - {tenancy.tenant_name}", lines
     )
+
+    # Record the deposit movement in the deposit ledger (linked to this journal,
+    # no extra journal — the line above already released account 2302), and set
+    # the deposit status so it isn't refunded again from the Deposit tab.
+    if deposit > 0:
+        refunded = net >= 0
+        db.add(DepositTransaction(
+            id=uuid4(),
+            tenancy_id=tenancy.id,
+            transaction_type='refund' if refunded else 'deduction',
+            amount=deposit,
+            transaction_date=tenancy.termination_date,
+            description=('Security deposit returned on early termination'
+                         if refunded else 'Security deposit applied to balance owed on termination'),
+            deduction_reason=None if refunded else 'unpaid_rent',
+            journal_entry_id=entry.id
+        ))
+        tenancy.deposit_status = 'refunded' if refunded else 'forfeited'
+
     db.commit()
     db.refresh(entry)
     return entry
