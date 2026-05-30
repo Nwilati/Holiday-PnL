@@ -204,6 +204,7 @@ export default function Tenancies() {
   });
   const [terminationPreview, setTerminationPreview] = useState<TerminationSettlement | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [terminateMode, setTerminateMode] = useState<'terminate' | 'recalculate'>('terminate');
 
   // Document upload
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -529,6 +530,7 @@ export default function Tenancies() {
   const handleTerminate = (tenancy: Tenancy, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedTenancy(tenancy);
+    setTerminateMode('terminate');
     setTerminationData({
       termination_date: new Date().toISOString().split('T')[0],
       termination_reason: '',
@@ -569,34 +571,31 @@ export default function Tenancies() {
     if (!selectedTenancy) return;
 
     try {
-      await api.terminateTenancy(selectedTenancy.id, terminationData);
+      if (terminateMode === 'recalculate') {
+        await api.recalculateSettlement(selectedTenancy.id, terminationData);
+      } else {
+        await api.terminateTenancy(selectedTenancy.id, terminationData);
+      }
       setShowTerminateModal(false);
       setTerminationPreview(null);
       loadTenancies();
-    } catch (error) {
-      console.error('Failed to terminate tenancy:', error);
-      alert('Failed to terminate tenancy. Please try again.');
+    } catch (error: any) {
+      console.error('Failed to save settlement:', error);
+      alert(error.response?.data?.detail || 'Failed to save. Please try again.');
     }
   };
 
-  const handleRecalculate = async (tenancy: Tenancy, e: React.MouseEvent) => {
+  const handleRecalculate = (tenancy: Tenancy, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(`Recalculate the exit settlement for ${tenancy.tenant_name}?\n\nThis rebuilds the refund as a PENDING payout (cleared when you pay it) and includes the security deposit. Any previously posted settlement is reversed.`)) return;
-    try {
-      const res = await api.recalculateSettlement(tenancy.id);
-      const s = res.data.settlement;
-      const fmt = (n: number) => `AED ${formatCurrency(n)}`;
-      const msg = s.refund_amount > 0
-        ? `Refund to tenant: ${fmt(s.refund_amount)} (pending)${s.deposit_amount > 0 ? ` — incl. deposit ${fmt(s.deposit_amount)}` : ''}.`
-        : s.balance_due_amount > 0
-        ? `Balance due from tenant: ${fmt(s.balance_due_amount)} (pending).`
-        : 'Settled (AED 0).';
-      alert(`Settlement recalculated.\n${msg}`);
-      loadTenancies();
-    } catch (error: any) {
-      console.error('Failed to recalculate settlement:', error);
-      alert(error.response?.data?.detail || 'Failed to recalculate settlement.');
-    }
+    setSelectedTenancy(tenancy);
+    setTerminateMode('recalculate');
+    setTerminationData({
+      termination_date: tenancy.termination_date || new Date().toISOString().split('T')[0],
+      termination_reason: tenancy.termination_reason || '',
+      charge_penalty: tenancy.charge_penalty ?? false,
+    });
+    setTerminationPreview(null);
+    setShowTerminateModal(true);
   };
 
   const handleDelete = (tenancy: Tenancy, e: React.MouseEvent) => {
@@ -1785,7 +1784,9 @@ export default function Tenancies() {
             <div className="fixed inset-0 bg-black/30" onClick={() => setShowTerminateModal(false)} />
             <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md">
               <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-red-700">Terminate Tenancy</h2>
+                <h2 className="text-base font-semibold text-red-700">
+                  {terminateMode === 'recalculate' ? 'Recalculate Settlement' : 'Terminate Tenancy'}
+                </h2>
                 <button onClick={() => setShowTerminateModal(false)} className="p-1 text-stone-400 hover:text-stone-600">
                   <X className="w-4 h-4" />
                 </button>
@@ -1795,7 +1796,9 @@ export default function Tenancies() {
                 <div className="flex items-start gap-3 p-3 bg-red-50 rounded-lg border border-red-200">
                   <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5" />
                   <p className="text-sm text-red-700">
-                    This will end the tenancy for <strong>{selectedTenancy.tenant_name}</strong> and unblock the calendar for short-term bookings.
+                    {terminateMode === 'recalculate'
+                      ? <>Redo the exit settlement for <strong>{selectedTenancy.tenant_name}</strong>. Adjust the penalty/date below; the previous settlement (and any posted ledger entry) is reversed and rebuilt as a pending payout.</>
+                      : <>This will end the tenancy for <strong>{selectedTenancy.tenant_name}</strong> and unblock the calendar for short-term bookings.</>}
                   </p>
                 </div>
 
@@ -1934,7 +1937,7 @@ export default function Tenancies() {
                   onClick={handleSubmitTermination}
                   className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded transition-colors"
                 >
-                  Terminate Tenancy
+                  {terminateMode === 'recalculate' ? 'Apply Settlement' : 'Terminate Tenancy'}
                 </button>
               </div>
             </div>

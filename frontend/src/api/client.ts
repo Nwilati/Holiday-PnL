@@ -315,8 +315,8 @@ const api = {
   terminateTenancy: (id: string, data: { termination_date: string; termination_reason: string; charge_penalty: boolean }) =>
     axiosInstance.post<TenancyTerminateResponse>(`/tenancies/${id}/terminate`, data),
 
-  recalculateSettlement: (id: string) =>
-    axiosInstance.post<TenancyTerminateResponse>(`/tenancies/${id}/recalculate-settlement`),
+  recalculateSettlement: (id: string, data: { termination_date: string; termination_reason: string; charge_penalty: boolean }) =>
+    axiosInstance.post<TenancyTerminateResponse>(`/tenancies/${id}/recalculate-settlement`, data),
 
   renewTenancy: (id: string, data: TenancyRenewInput) =>
     axiosInstance.post<Tenancy>(`/tenancies/${id}/renew`, data),

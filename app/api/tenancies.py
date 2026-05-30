@@ -478,15 +478,18 @@ def delete_tenancy(tenancy_id: UUID, db: Session = Depends(get_db)):
 
 @router.post("/{tenancy_id}/terminate/preview", response_model=TenancyTerminationResult)
 def preview_termination(tenancy_id: UUID, data: TenancyTerminationPreview, db: Session = Depends(get_db)):
-    """Preview the early-termination settlement without mutating anything."""
+    """Preview the early-termination settlement without mutating anything.
+
+    Allowed for active tenancies (before terminating) and terminated tenancies
+    (to preview a recalculated settlement, e.g. toggling the penalty)."""
     tenancy = db.query(Tenancy).filter(Tenancy.id == tenancy_id).first()
     if not tenancy:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenancy not found")
 
-    if str(tenancy.status) != 'active':
+    if str(tenancy.status) not in ('active', 'terminated'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only active tenancies can be terminated"
+            detail="Only active or terminated tenancies can be previewed"
         )
 
     settlement = calculate_termination_settlement(
@@ -606,15 +609,15 @@ def terminate_tenancy(tenancy_id: UUID, data: TenancyTerminate, db: Session = De
 
 
 @router.post("/{tenancy_id}/recalculate-settlement", response_model=TenancyTerminateResponse)
-def recalculate_settlement(tenancy_id: UUID, db: Session = Depends(get_db)):
-    """Re-run the early-termination settlement for an already-terminated tenancy
-    using the current rules (pending refund, deposit included). Undoes any prior
-    settlement journal/lines and rebuilds a fresh PENDING settlement line. Useful
-    for tenancies terminated under older logic."""
+def recalculate_settlement(tenancy_id: UUID, data: TenancyTerminate, db: Session = Depends(get_db)):
+    """Redo the exit settlement for an already-terminated tenancy with possibly
+    changed inputs (penalty on/off, exit date, reason). Reverses any prior
+    settlement journal/deposit transaction, restores & re-voids future cheques for
+    the (possibly new) exit date, and rebuilds a fresh PENDING settlement line."""
     tenancy = db.query(Tenancy).filter(Tenancy.id == tenancy_id).first()
     if not tenancy:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenancy not found")
-    if str(tenancy.status) != 'terminated' or not tenancy.termination_date:
+    if str(tenancy.status) != 'terminated':
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only terminated tenancies can be recalculated"
@@ -637,12 +640,38 @@ def recalculate_settlement(tenancy_id: UUID, db: Session = Depends(get_db)):
         WHERE tenancy_id = :id AND COALESCE(payment_method, '') IN ('refund', 'balance_due')
     """), {'id': tenancy_id})
 
-    # 3. Recompute with current rules (deposit included)
+    # 3. Restore previously voided cheques, then re-void those due after the new exit date
+    db.execute(text("""
+        UPDATE tenancy_cheques SET status = CAST('pending' AS cheque_status), updated_at = NOW()
+        WHERE tenancy_id = :id AND status = 'cancelled'
+    """), {'id': tenancy_id})
+    db.execute(text("""
+        UPDATE tenancy_cheques SET status = CAST('cancelled' AS cheque_status), updated_at = NOW()
+        WHERE tenancy_id = :id AND due_date > :termination_date AND status = 'pending'
+    """), {'id': tenancy_id, 'termination_date': data.termination_date})
+
+    # 4. Persist the (possibly changed) termination inputs
+    db.execute(text("""
+        UPDATE tenancies
+        SET termination_date = :termination_date,
+            termination_reason = :termination_reason,
+            charge_penalty = :charge_penalty,
+            updated_at = NOW()
+        WHERE id = :id
+    """), {
+        'id': tenancy_id,
+        'termination_date': data.termination_date,
+        'termination_reason': data.termination_reason,
+        'charge_penalty': data.charge_penalty,
+    })
+    db.refresh(tenancy)
+
+    # 5. Recompute with the new inputs
     settlement = calculate_termination_settlement(
-        db, tenancy, tenancy.termination_date, bool(tenancy.charge_penalty)
+        db, tenancy, data.termination_date, data.charge_penalty
     )
 
-    # 4. Reset deposit status (its refund, if any, was undone above)
+    # 6. Reset deposit status (its refund, if any, was undone above)
     new_deposit_status = calculate_deposit_status(db, tenancy_id, tenancy.security_deposit or Decimal('0'))
 
     db.execute(text("""
@@ -661,7 +690,7 @@ def recalculate_settlement(tenancy_id: UUID, db: Session = Depends(get_db)):
         'deposit_status': new_deposit_status,
     })
 
-    # 5. Create a fresh PENDING settlement line
+    # 7. Create a fresh PENDING settlement line
     deposit_note = (
         f" (incl. deposit AED {settlement['deposit_amount']})"
         if settlement['deposit_amount'] > 0 else ""
@@ -672,7 +701,7 @@ def recalculate_settlement(tenancy_id: UUID, db: Session = Depends(get_db)):
             VALUES (:id, :tenancy_id, 'refund', :amount, :due_date, CAST('pending' AS cheque_status), :notes)
         """), {
             'id': uuid4(), 'tenancy_id': tenancy_id,
-            'amount': -settlement['refund_amount'], 'due_date': tenancy.termination_date,
+            'amount': -settlement['refund_amount'], 'due_date': data.termination_date,
             'notes': f"Early termination refund (pending payout){deposit_note}",
         })
     elif settlement['balance_due_amount'] > 0:
@@ -681,9 +710,15 @@ def recalculate_settlement(tenancy_id: UUID, db: Session = Depends(get_db)):
             VALUES (:id, :tenancy_id, 'balance_due', :amount, :due_date, CAST('pending' AS cheque_status), :notes)
         """), {
             'id': uuid4(), 'tenancy_id': tenancy_id,
-            'amount': settlement['balance_due_amount'], 'due_date': tenancy.termination_date,
+            'amount': settlement['balance_due_amount'], 'due_date': data.termination_date,
             'notes': f"Early termination balance due{deposit_note}",
         })
+
+    # 8. Refresh the calendar block to the (possibly new) exit date
+    remove_calendar_block_for_tenancy(db, tenancy_id)
+    create_calendar_block_for_tenancy(
+        db, tenancy.property_id, tenancy_id, tenancy.contract_start, data.termination_date
+    )
 
     db.commit()
     db.refresh(tenancy)
