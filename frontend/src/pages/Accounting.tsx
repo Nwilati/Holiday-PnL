@@ -79,6 +79,7 @@ export default function Accounting() {
   const [plLoading, setPlLoading] = useState(false);
   const [properties, setProperties] = useState<{ id: string; name: string }[]>([]);
   const [backfilling, setBackfilling] = useState(false);
+  const [postingDrafts, setPostingDrafts] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -100,20 +101,36 @@ export default function Accounting() {
       .finally(() => setPlLoading(false));
   }, [activeTab, plStart, plEnd, plProperty]);
 
+  const refreshIncomeStatement = async () => {
+    const r = await api.getIncomeStatement({ start_date: plStart, end_date: plEnd, property_id: plProperty || undefined });
+    setIncomeStatement(r.data);
+  };
+
   const runBackfill = async () => {
     if (!confirm('Generate ledger entries for all cleared tenancy payments and terminations? Safe to re-run.')) return;
     setBackfilling(true);
     try {
       const res = await api.backfillTenancyJournals();
       alert(`Backfill complete: ${res.data.created} posted, ${res.data.skipped} skipped.`);
-      if (activeTab === 'income-statement') {
-        const r = await api.getIncomeStatement({ start_date: plStart, end_date: plEnd, property_id: plProperty || undefined });
-        setIncomeStatement(r.data);
-      }
+      if (activeTab === 'income-statement') await refreshIncomeStatement();
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Backfill failed');
     } finally {
       setBackfilling(false);
+    }
+  };
+
+  const runPostDrafts = async () => {
+    if (!confirm('Post all draft booking & expense journals so they appear in the P&L? Safe to re-run.')) return;
+    setPostingDrafts(true);
+    try {
+      const res = await api.postAllDrafts();
+      alert(`Posted ${res.data.posted} draft journal(s), ${res.data.skipped} skipped.`);
+      if (activeTab === 'income-statement') await refreshIncomeStatement();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Posting drafts failed');
+    } finally {
+      setPostingDrafts(false);
     }
   };
 
@@ -531,11 +548,18 @@ export default function Accounting() {
                     {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
-                <button onClick={runBackfill} disabled={backfilling}
-                  className="ml-auto px-3 py-1.5 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded disabled:opacity-50"
-                  title="Post ledger entries for all cleared tenancy payments and terminations (idempotent)">
-                  {backfilling ? 'Backfilling…' : 'Backfill tenancy ledger'}
-                </button>
+                <div className="ml-auto flex items-end gap-2">
+                  <button onClick={runPostDrafts} disabled={postingDrafts}
+                    className="px-3 py-1.5 text-sm font-medium text-stone-700 border border-stone-300 hover:bg-stone-50 rounded disabled:opacity-50"
+                    title="Post draft booking & expense journals so they show in the P&L (idempotent)">
+                    {postingDrafts ? 'Posting…' : 'Post draft journals'}
+                  </button>
+                  <button onClick={runBackfill} disabled={backfilling}
+                    className="px-3 py-1.5 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded disabled:opacity-50"
+                    title="Post ledger entries for all cleared tenancy payments and terminations (idempotent)">
+                    {backfilling ? 'Backfilling…' : 'Backfill tenancy ledger'}
+                  </button>
+                </div>
               </div>
 
               {plLoading ? (

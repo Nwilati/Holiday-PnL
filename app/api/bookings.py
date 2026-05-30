@@ -194,10 +194,12 @@ def update_booking(booking_id: UUID, booking_data: BookingUpdate, db: Session = 
     # Regenerate journal entry if financial fields changed
     if financial_changed:
         try:
-            # Delete existing unposted journal first
+            # Delete the existing auto-generated journal (posted or not) so the
+            # regenerated one reflects the new amounts. These are system-owned
+            # entries keyed by source/source_id, safe to replace.
             db.execute(text('''
                 DELETE FROM journal_entries
-                WHERE source = :source AND source_id = :source_id AND is_posted = FALSE
+                WHERE source = :source AND source_id = :source_id
             '''), {'source': 'booking', 'source_id': booking_id})
             db.commit()
             generate_booking_journal(booking_id=booking.id, db=db)

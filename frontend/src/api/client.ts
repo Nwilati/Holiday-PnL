@@ -357,6 +357,9 @@ const api = {
   backfillTenancyJournals: () =>
     axiosInstance.post<{ created: number; skipped: number }>('/accounting/backfill-tenancy-journals'),
 
+  postAllDrafts: () =>
+    axiosInstance.post<{ posted: number; skipped: number }>('/accounting/post-all-drafts'),
+
   // Direct Cheque Operations (by cheque ID only)
   depositCheque: (chequeId: string, data: { deposited_date: string }) =>
     axiosInstance.post<TenancyCheque>(`/tenancies/cheques/${chequeId}/deposit`, data),

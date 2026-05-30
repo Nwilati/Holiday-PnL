@@ -686,7 +686,14 @@ def generate_booking_journal(booking_id: UUID, db: Session = Depends(get_db)):
         lines=lines
     )
 
-    return create_journal_entry(entry_data, db)
+    result = create_journal_entry(entry_data, db)
+    # Auto-post so it flows into the trial balance / income statement immediately.
+    db.execute(text("""
+        UPDATE journal_entries SET is_posted = TRUE, posted_at = NOW()
+        WHERE source = 'booking' AND source_id = :sid AND is_posted = FALSE
+    """), {'sid': booking_id})
+    db.commit()
+    return result
 
 
 @router.post("/generate-journal/expense/{expense_id}", response_model=JournalEntryResponse)
@@ -758,7 +765,14 @@ def generate_expense_journal(expense_id: UUID, db: Session = Depends(get_db)):
         lines=lines
     )
 
-    return create_journal_entry(entry_data, db)
+    result = create_journal_entry(entry_data, db)
+    # Auto-post so it flows into the trial balance / income statement immediately.
+    db.execute(text("""
+        UPDATE journal_entries SET is_posted = TRUE, posted_at = NOW()
+        WHERE source = 'expense' AND source_id = :sid AND is_posted = FALSE
+    """), {'sid': expense_id})
+    db.commit()
+    return result
 
 
 # ============================================================================
@@ -929,6 +943,33 @@ def backfill_tenancy_journals(db: Session = Depends(get_db)):
             skipped += 1
 
     return {"created": created, "skipped": skipped}
+
+
+@router.post("/post-all-drafts")
+def post_all_drafts(db: Session = Depends(get_db)):
+    """Post all balanced, unlocked draft journals from the auto-generated sources
+    (bookings, expenses) so they flow into the trial balance / income statement.
+    Idempotent and safe to re-run; manual journals are left untouched."""
+    drafts = db.query(JournalEntry).filter(
+        JournalEntry.is_posted == False,
+        JournalEntry.is_locked == False,
+        JournalEntry.source.in_(['booking', 'expense'])
+    ).all()
+
+    posted = 0
+    skipped = 0
+    for je in drafts:
+        total_debit = sum(Decimal(str(l.debit or 0)) for l in je.lines)
+        total_credit = sum(Decimal(str(l.credit or 0)) for l in je.lines)
+        if len(je.lines) >= 2 and total_debit == total_credit:
+            je.is_posted = True
+            je.posted_at = datetime.now()
+            posted += 1
+        else:
+            skipped += 1
+
+    db.commit()
+    return {"posted": posted, "skipped": skipped}
 
 
 @router.get("/income-statement", response_model=IncomeStatementResponse)
