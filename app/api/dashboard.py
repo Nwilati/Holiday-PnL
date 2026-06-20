@@ -510,12 +510,14 @@ def get_property_roi(
             cast(Booking.status, String).notin_(['cancelled', 'no_show'])
         ).scalar() or 0
 
-        # Get tenancy revenue (expected annual rent from active contracts)
+        # Get tenancy revenue (expected annual rent from active + renewed contracts).
+        # 'renewed' must be included so a property renewed several times in the period
+        # shows the combined rent of every term, not just the current active one.
         tenancy_revenue = db.query(
             func.sum(Tenancy.annual_rent).label('amount')
         ).filter(
             Tenancy.property_id == prop.id,
-            Tenancy.status == 'active',
+            cast(Tenancy.status, String).in_(['active', 'renewed']),
             Tenancy.contract_start <= end,
             Tenancy.contract_end >= start
         ).scalar() or 0
