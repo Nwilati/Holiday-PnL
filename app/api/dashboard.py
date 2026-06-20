@@ -5,12 +5,37 @@ from typing import Optional
 from uuid import UUID
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+import calendar
 from app.core.database import get_db
 from app.models.models import Booking, Expense, Property, Channel, ExpenseCategory, Tenancy, TenancyCheque
 from app.schemas.schemas import DashboardKPIs, MonthlyRevenue, ChannelPerformance, ExpenseBreakdown
 from app.api.accounting import prorated_tenancy_revenue
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
+
+def _monthly_tenancy_rent(db: Session, year: int, property_id: Optional[UUID] = None) -> dict:
+    """Accrual annual-tenancy rent recognised in each month of `year` -> {1..12: float}.
+
+    Each active/renewed/terminated contract's rent is prorated to the days it occupies
+    within each month (via prorated_tenancy_revenue), so the monthly revenue trend
+    reflects annual rent instead of booking revenue alone.
+    """
+    q = db.query(Tenancy).filter(
+        cast(Tenancy.status, String).in_(['active', 'renewed', 'terminated']),
+        Tenancy.contract_start <= date(year, 12, 31),
+        Tenancy.contract_end >= date(year, 1, 1),
+    )
+    if property_id:
+        q = q.filter(Tenancy.property_id == property_id)
+    rows = q.all()
+    out = {}
+    for m in range(1, 13):
+        m_start = date(year, m, 1)
+        m_end = date(year, m, calendar.monthrange(year, m)[1])
+        out[m] = float(sum(prorated_tenancy_revenue(t, m_start, m_end) for t in rows))
+    return out
+
 
 @router.get("/kpis", response_model=DashboardKPIs)
 def get_kpis(
@@ -115,22 +140,25 @@ def get_revenue_trend(
         extract('month', Expense.expense_date)
     ).all()
 
-    expense_by_month = {int(r.month): r.expenses or 0 for r in expense_results}
+    expense_by_month = {int(r.month): float(r.expenses or 0) for r in expense_results}
+    booking_net_by_month = {int(r.month): float(r.net_revenue or 0) for r in results}
+    rent_by_month = _monthly_tenancy_rent(db, year, property_id)
 
     months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
+    # Revenue = short-term booking net + prorated annual rent for the month, so the
+    # trend isn't flat for annual-tenancy properties. Emit all 12 months. The 'revenue'
+    # key matches the chart's dataKey (single + all-properties trends now share a shape).
     trend = []
-    for r in results:
-        month_num = int(r.month)
-        expenses = expense_by_month.get(month_num, 0)
-        net = r.net_revenue or 0
+    for i in range(1, 13):
+        revenue = booking_net_by_month.get(i, 0) + rent_by_month.get(i, 0)
+        expenses = expense_by_month.get(i, 0)
         trend.append({
-            'month': months[month_num - 1],
-            'gross_revenue': float(r.gross_revenue or 0),
-            'net_revenue': float(net),
-            'expenses': float(expenses),
-            'noi': float(net - expenses)
+            'month': months[i - 1],
+            'revenue': revenue,
+            'expenses': expenses,
+            'noi': revenue - expenses
         })
 
     return trend
@@ -356,9 +384,13 @@ def get_yoy_comparison(
             expense_query = expense_query.filter(Expense.property_id == property_id)
         expenses = expense_query.scalar() or 0
 
+        # Include prorated annual-tenancy rent so the revenue/NOI comparison isn't
+        # short-term-only (otherwise annual-tenancy properties show no YoY revenue).
+        rent = sum(_monthly_tenancy_rent(db, target_year, property_id).values())
+
         return {
-            'revenue': float(revenue.revenue or 0),
-            'net_revenue': float(revenue.net_revenue or 0),
+            'revenue': float(revenue.revenue or 0) + rent,
+            'net_revenue': float(revenue.net_revenue or 0) + rent,
             'expenses': float(expenses),
             'bookings': revenue.bookings or 0,
             'nights': revenue.nights or 0
@@ -426,6 +458,7 @@ def get_revenue_trend_all(
         'gross': float(r.gross_revenue or 0),
         'net': float(r.net_revenue or 0)
     } for r in results}
+    rent_by_month = _monthly_tenancy_rent(db, year)
 
     months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -434,11 +467,13 @@ def get_revenue_trend_all(
     for i in range(1, 13):
         rev = revenue_by_month.get(i, {'gross': 0, 'net': 0})
         exp = expense_by_month.get(i, 0)
+        # Combine short-term booking net with prorated annual rent for the month.
+        revenue = rev['net'] + rent_by_month.get(i, 0)
         trend.append({
             'month': months[i - 1],
-            'revenue': rev['net'],
+            'revenue': revenue,
             'expenses': exp,
-            'noi': rev['net'] - exp
+            'noi': revenue - exp
         })
 
     return trend
