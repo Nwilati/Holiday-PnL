@@ -8,7 +8,7 @@ from decimal import Decimal
 from app.core.database import get_db
 from app.models.models import Booking, Expense, Property, Channel, ExpenseCategory, Tenancy, TenancyCheque
 from app.schemas.schemas import DashboardKPIs, MonthlyRevenue, ChannelPerformance, ExpenseBreakdown
-from app.api.accounting import calculate_termination_settlement
+from app.api.accounting import prorated_tenancy_revenue
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -510,32 +510,17 @@ def get_property_roi(
             cast(Booking.status, String).notin_(['cancelled', 'no_show'])
         ).scalar() or 0
 
-        # Get tenancy revenue (expected annual rent from active + renewed contracts).
-        # 'renewed' must be included so a property renewed several times in the period
-        # shows the combined rent of every term, not just the current active one.
-        tenancy_revenue = db.query(
-            func.sum(Tenancy.annual_rent).label('amount')
-        ).filter(
+        # Tenancy revenue prorated to the year: each active/renewed/terminated
+        # contract contributes only the rent earned in days falling within [start, end]
+        # (a contract spanning two years splits; terminated counts occupied days only).
+        # Matches the /tenancies/dashboard/annual-revenue accrual figure.
+        tenancy_rows = db.query(Tenancy).filter(
             Tenancy.property_id == prop.id,
-            cast(Tenancy.status, String).in_(['active', 'renewed']),
-            Tenancy.contract_start <= end,
-            Tenancy.contract_end >= start
-        ).scalar() or 0
-
-        # Early-terminated tenancies are excluded by the 'active' filter above; still
-        # recognise the rent they earned for the occupied period (rent_for_occupancy),
-        # consistent with the annual-revenue dashboard and the termination journal.
-        terminated = db.query(Tenancy).filter(
-            Tenancy.property_id == prop.id,
-            cast(Tenancy.status, String) == 'terminated',
-            Tenancy.termination_date.isnot(None),
+            cast(Tenancy.status, String).in_(['active', 'renewed', 'terminated']),
             Tenancy.contract_start <= end,
             Tenancy.contract_end >= start
         ).all()
-        terminated_revenue = sum(
-            float(calculate_termination_settlement(db, t, t.termination_date, False)['rent_for_occupancy'])
-            for t in terminated
-        )
+        tenancy_revenue = sum(float(prorated_tenancy_revenue(t, start, end)) for t in tenancy_rows)
 
         # Get expenses
         expenses = db.query(
@@ -546,7 +531,7 @@ def get_property_roi(
             Expense.expense_date <= end
         ).scalar() or 0
 
-        total_revenue = float(revenue) + float(tenancy_revenue) + terminated_revenue
+        total_revenue = float(revenue) + tenancy_revenue
         total_expenses = float(expenses)
         noi = total_revenue - total_expenses
         purchase_price = float(prop.purchase_price)

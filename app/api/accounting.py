@@ -889,6 +889,37 @@ def calculate_termination_settlement(db: Session, tenancy, termination_date: dat
     }
 
 
+def prorated_tenancy_revenue(tenancy, period_start: date, period_end: date) -> Decimal:
+    """Accrual rent a tenancy earns within [period_start, period_end] (inclusive).
+
+    Rent is spread evenly over the occupied days, so each calendar period gets the
+    share of days that fall inside it — a contract spanning two years splits across
+    them. Active/renewed prorate the full contract term (contract_value over its
+    days); terminated stop at the termination date and use the annual-rent/365
+    settlement basis (matching the termination journal). Returns 0 if no overlap.
+    """
+    cs = tenancy.contract_start
+    status = str(tenancy.status)
+
+    if status == 'terminated' and tenancy.termination_date:
+        occ_start, occ_end = cs, tenancy.termination_date
+        o_start = max(occ_start, period_start)
+        o_end = min(occ_end, period_end)
+        days = (o_end - o_start).days + 1 if o_end >= o_start else 0
+        annual_rent = Decimal(str(tenancy.annual_rent or 0))
+        return _money(annual_rent * Decimal(days) / Decimal('365'))
+
+    ce = tenancy.contract_end
+    total_days = (ce - cs).days + 1
+    if total_days <= 0:
+        return Decimal('0.00')
+    o_start = max(cs, period_start)
+    o_end = min(ce, period_end)
+    days = (o_end - o_start).days + 1 if o_end >= o_start else 0
+    contract_value = Decimal(str(tenancy.contract_value or 0))
+    return _money(contract_value * Decimal(days) / Decimal(total_days))
+
+
 def generate_tenancy_payment_journal(db: Session, cheque_id: UUID):
     """Post a cash-basis journal for a cleared tenancy rent payment.
 

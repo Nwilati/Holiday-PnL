@@ -21,7 +21,7 @@ from app.schemas.schemas import (
     AnnualRevenueResponse
 )
 from app.api.accounting import (
-    calculate_termination_settlement,
+    calculate_termination_settlement, prorated_tenancy_revenue,
     generate_tenancy_payment_journal, generate_tenancy_termination_journal
 )
 from app.api.deposits import calculate_deposit_status
@@ -1148,6 +1148,20 @@ def clear_cheque_direct(
     return cheque
 
 
+@router.post("/cheques/backfill-cleared-dates")
+def backfill_cheque_cleared_dates(db: Session = Depends(get_db)):
+    """Set cleared_date = due_date for cleared cheques that have none, so cash-basis
+    (payment-date) revenue reporting includes historically-cleared cheques. New clears
+    already set cleared_date, so this is a one-time repair. Idempotent."""
+    result = db.execute(text("""
+        UPDATE tenancy_cheques
+        SET cleared_date = due_date, updated_at = NOW()
+        WHERE status = 'cleared' AND cleared_date IS NULL AND due_date IS NOT NULL
+    """))
+    db.commit()
+    return {"updated": result.rowcount}
+
+
 @router.post("/cheques/{cheque_id}/bounce", response_model=TenancyChequeResponse)
 def bounce_cheque_direct(
     cheque_id: UUID,
@@ -1375,14 +1389,16 @@ def get_annual_revenue(
             )
         """
 
-    # Get cleared cheque amounts (filter by cheque due date within period)
+    # Cash collected = cleared cheques, dated by ACTUAL PAYMENT (cleared_date) so a
+    # cheque prepaid in a prior year counts in the year it was paid, not its due year.
+    # (Cleared cheques missing a cleared_date are backfilled to due_date.)
     cleared_sql = text(f"""
         SELECT COALESCE(SUM(c.amount), 0) as total
         FROM tenancy_cheques c
         JOIN tenancies t ON c.tenancy_id = t.id
         WHERE c.status = 'cleared'
         {property_filter}
-    """ + (" AND c.due_date BETWEEN :start_date AND :end_date" if start_date and end_date else ""))
+    """ + (" AND c.cleared_date BETWEEN :start_date AND :end_date" if start_date and end_date else ""))
 
     # Get pending cheque amounts (filter by cheque due date within period)
     pending_sql = text(f"""
@@ -1393,15 +1409,6 @@ def get_annual_revenue(
         AND t.status IN ('active', 'renewed')
         {property_filter}
     """ + (" AND c.due_date BETWEEN :start_date AND :end_date" if start_date and end_date else ""))
-
-    # Get total contract value (include renewed contracts that overlap the period)
-    contract_sql = text(f"""
-        SELECT COALESCE(SUM(t.contract_value), 0) as total
-        FROM tenancies t
-        WHERE t.status IN ('active', 'renewed')
-        {property_filter}
-        {date_filter}
-    """)
 
     # Get active tenancy count
     count_sql = text(f"""
@@ -1422,29 +1429,31 @@ def get_annual_revenue(
 
     cleared = db.execute(cleared_sql, params).scalar() or Decimal('0')
     pending = db.execute(pending_sql, params).scalar() or Decimal('0')
-    contract_value = db.execute(contract_sql, params).scalar() or Decimal('0')
     active_count = db.execute(count_sql, params).scalar() or 0
 
-    # Early-terminated tenancies are dropped from contract_value above (the filter
-    # only keeps active/renewed), which would zero out the revenue of a property
-    # whose only tenancy was terminated. They still earned rent for the occupied
-    # period, so recognise rent_for_occupancy here — the same figure the
-    # termination journal posts to Rent Revenue once the settlement clears.
-    terminated_q = db.query(Tenancy).filter(
-        text("status::text = 'terminated'"),
-        Tenancy.termination_date.isnot(None),
+    # Accrual revenue: recognise each tenancy's rent in the period its days fall in.
+    # With a date window we prorate every active/renewed/terminated contract to the
+    # days inside [start, end] (so a contract spanning two years splits across them,
+    # and a terminated tenancy counts only its occupied days). Without a window we
+    # report full contract value (active/renewed) or earned rent (terminated).
+    rev_q = db.query(Tenancy).filter(
+        text("status::text IN ('active', 'renewed', 'terminated')"),
     )
     if property_id:
-        terminated_q = terminated_q.filter(Tenancy.property_id == property_id)
+        rev_q = rev_q.filter(Tenancy.property_id == property_id)
     if start_date and end_date:
-        terminated_q = terminated_q.filter(
+        rev_q = rev_q.filter(
             Tenancy.contract_start <= end_date,
             Tenancy.contract_end >= start_date,
         )
-    for t in terminated_q.all():
-        # charge_penalty does not affect rent_for_occupancy, so its value is irrelevant here.
-        s = calculate_termination_settlement(db, t, t.termination_date, False)
-        contract_value += s['rent_for_occupancy']
+    contract_value = Decimal('0')
+    for t in rev_q.all():
+        if start_date and end_date:
+            contract_value += prorated_tenancy_revenue(t, start_date, end_date)
+        elif str(t.status) == 'terminated' and t.termination_date:
+            contract_value += calculate_termination_settlement(db, t, t.termination_date, False)['rent_for_occupancy']
+        else:
+            contract_value += Decimal(str(t.contract_value or 0))
 
     return AnnualRevenueResponse(
         total_cleared=cleared,
