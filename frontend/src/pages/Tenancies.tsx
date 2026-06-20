@@ -212,6 +212,9 @@ export default function Tenancies() {
 
   // Cheque editing
   const [editingChequeId, setEditingChequeId] = useState<string | null>(null);
+  // Tracks a cheque whose status change (deposit/clear/bounce) is in flight, so we
+  // can disable its action buttons and prevent duplicate submissions.
+  const [processingChequeId, setProcessingChequeId] = useState<string | null>(null);
   const [editChequeData, setEditChequeData] = useState({
     payment_method: 'cheque' as 'cheque' | 'bank_transfer' | 'cash',
     cheque_number: '',
@@ -619,41 +622,77 @@ export default function Tenancies() {
 
   // Cheque operations
   const handleDepositCheque = async (chequeId: string) => {
+    if (processingChequeId) return; // guard against duplicate submissions
+    setProcessingChequeId(chequeId);
     try {
       await api.depositCheque(chequeId, { deposited_date: new Date().toISOString().split('T')[0] });
       if (selectedTenancy) {
         const response = await api.getTenancy(selectedTenancy.id);
         setSelectedTenancy(response.data as any);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to deposit cheque:', error);
+      if (selectedTenancy) {
+        try {
+          const response = await api.getTenancy(selectedTenancy.id);
+          setSelectedTenancy(response.data as any);
+        } catch { /* ignore refresh failure */ }
+      }
+      alert(error?.response?.data?.detail || 'Failed to deposit cheque. Please try again.');
+    } finally {
+      setProcessingChequeId(null);
     }
   };
 
   const handleClearCheque = async (chequeId: string) => {
+    if (processingChequeId) return; // guard against duplicate submissions
+    setProcessingChequeId(chequeId);
     try {
       await api.clearCheque(chequeId, { cleared_date: new Date().toISOString().split('T')[0] });
       if (selectedTenancy) {
         const response = await api.getTenancy(selectedTenancy.id);
         setSelectedTenancy(response.data as any);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to clear cheque:', error);
+      // Refresh so the UI reflects the cheque's real status (e.g. it was
+      // already cleared by a previous click) and the stale button disappears.
+      if (selectedTenancy) {
+        try {
+          const response = await api.getTenancy(selectedTenancy.id);
+          setSelectedTenancy(response.data as any);
+        } catch { /* ignore refresh failure */ }
+      }
+      const detail = error?.response?.data?.detail || 'Failed to clear cheque. Please try again.';
+      alert(detail);
+    } finally {
+      setProcessingChequeId(null);
     }
   };
 
   const handleBounceCheque = async (chequeId: string) => {
+    if (processingChequeId) return; // guard against duplicate submissions
     const reason = prompt('Enter bounce reason:');
     if (!reason) return;
 
+    setProcessingChequeId(chequeId);
     try {
       await api.bounceCheque(chequeId, { bounce_reason: reason });
       if (selectedTenancy) {
         const response = await api.getTenancy(selectedTenancy.id);
         setSelectedTenancy(response.data as any);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to mark cheque as bounced:', error);
+      if (selectedTenancy) {
+        try {
+          const response = await api.getTenancy(selectedTenancy.id);
+          setSelectedTenancy(response.data as any);
+        } catch { /* ignore refresh failure */ }
+      }
+      alert(error?.response?.data?.detail || 'Failed to mark cheque as bounced. Please try again.');
+    } finally {
+      setProcessingChequeId(null);
     }
   };
 
@@ -1404,22 +1443,25 @@ export default function Tenancies() {
                                 {cheque.status === 'pending' && (
                                   <button
                                     onClick={() => handleDepositCheque(cheque.id)}
-                                    className="px-2 py-1 text-xs bg-sky-100 text-sky-700 rounded hover:bg-sky-200"
+                                    disabled={processingChequeId === cheque.id}
+                                    className="px-2 py-1 text-xs bg-sky-100 text-sky-700 rounded hover:bg-sky-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
-                                    Deposit
+                                    {processingChequeId === cheque.id ? '...' : 'Deposit'}
                                   </button>
                                 )}
                                 {cheque.status === 'deposited' && (
                                   <>
                                     <button
                                       onClick={() => handleClearCheque(cheque.id)}
-                                      className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                                      disabled={processingChequeId === cheque.id}
+                                      className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                      Clear
+                                      {processingChequeId === cheque.id ? '...' : 'Clear'}
                                     </button>
                                     <button
                                       onClick={() => handleBounceCheque(cheque.id)}
-                                      className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                                      disabled={processingChequeId === cheque.id}
+                                      className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       Bounce
                                     </button>

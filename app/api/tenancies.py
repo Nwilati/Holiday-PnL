@@ -114,7 +114,7 @@ def _post_cheque_clear_journal(db: Session, cheque_id: UUID):
     if (cheque.payment_method or '') in ('refund', 'balance_due'):
         generate_tenancy_termination_journal(db, cheque.tenancy_id)
     else:
-        _post_cheque_clear_journal(db, cheque_id)
+        generate_tenancy_payment_journal(db, cheque_id)
 
 
 # ============================================================================
