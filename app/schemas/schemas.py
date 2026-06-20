@@ -565,9 +565,10 @@ class TenancyRenew(BaseModel):
 # ============================================================================
 
 class AnnualRevenueResponse(BaseModel):
-    total_cleared: Decimal
-    total_pending: Decimal
-    total_contract_value: Decimal
+    total_cleared: Decimal          # collected: cleared rent cheques due in the period
+    total_pending: Decimal          # outstanding: pending/deposited rent cheques due in the period
+    expected_collection: Decimal    # to collect this year = cleared + pending (rent cheques due in period)
+    total_contract_value: Decimal   # accrual revenue earned in the period (prorated) — P&L figure
     active_tenancies: int
 
 

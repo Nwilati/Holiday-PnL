@@ -433,7 +433,8 @@ export default function Dashboard() {
 
   const getCollectionPercent = () => {
     const cleared = Number(annualRevenue?.total_cleared) || 0;
-    const total = Number(annualRevenue?.total_contract_value) || 0;
+    // Collection progress against what's due to collect this year, not accrual revenue.
+    const total = Number(annualRevenue?.expected_collection) || 0;
     return total > 0 ? Math.round(cleared / total * 100) : 0;
   };
 
@@ -610,15 +611,19 @@ export default function Dashboard() {
             trend={yoyChanges?.revenue}
           />
           <div className="pl-4">
-            <dt className="text-xs text-stone-500 uppercase tracking-wide">Annual Rent</dt>
+            <dt className="text-xs text-stone-500 uppercase tracking-wide">Annual Rent Collection</dt>
             <dd className="mt-1 flex items-baseline gap-4">
               <div>
-                <span className="text-xs text-stone-400">Expected</span>
-                <p className="text-lg font-semibold text-stone-900">AED {formatAmount(Number(annualRevenue?.total_contract_value) || 0)}</p>
+                <span className="text-xs text-stone-400">To Collect</span>
+                <p className="text-lg font-semibold text-stone-900">AED {formatAmount(Number(annualRevenue?.expected_collection) || 0)}</p>
               </div>
               <div>
                 <span className="text-xs text-stone-400">Collected</span>
                 <p className="text-lg font-semibold text-green-700">AED {formatAmount(Number(annualRevenue?.total_cleared) || 0)}</p>
+              </div>
+              <div>
+                <span className="text-xs text-stone-400">Outstanding</span>
+                <p className="text-lg font-semibold text-amber-700">AED {formatAmount(Number(annualRevenue?.total_pending) || 0)}</p>
               </div>
             </dd>
           </div>
@@ -802,9 +807,9 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="p-3 bg-stone-50 rounded">
-              <div className="text-xs text-stone-500">Contract Value</div>
+              <div className="text-xs text-stone-500">To Collect ({selectedYear})</div>
               <div className="text-sm font-semibold text-stone-700 mt-1">
-                AED {formatAmount(Number(annualRevenue?.total_contract_value) || 0)}
+                AED {formatAmount(Number(annualRevenue?.expected_collection) || 0)}
               </div>
             </div>
             <div className="p-3 bg-stone-50 rounded">

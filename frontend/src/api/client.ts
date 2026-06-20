@@ -455,9 +455,10 @@ const api = {
 };
 
 export interface AnnualRevenueResponse {
-  total_cleared: number;
-  total_pending: number;
-  total_contract_value: number;
+  total_cleared: number;        // collected (rent cheques due this period, cleared)
+  total_pending: number;        // outstanding (rent cheques due this period, not yet collected)
+  expected_collection: number;  // to collect this year = cleared + pending
+  total_contract_value: number; // accrual revenue earned this period (P&L)
   active_tenancies: number;
 }
 

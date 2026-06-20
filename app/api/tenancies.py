@@ -1389,26 +1389,31 @@ def get_annual_revenue(
             )
         """
 
-    # Cash collected = cleared cheques, dated by ACTUAL PAYMENT (cleared_date) so a
-    # cheque prepaid in a prior year counts in the year it was paid, not its due year.
-    # (Cleared cheques missing a cleared_date are backfilled to due_date.)
+    # Collection view (cash flow), all on the same basis: rent cheques whose DUE DATE
+    # falls in the period (excluding cancelled cheques and synthetic refund/balance_due
+    # settlement lines). "Collected" = the cleared ones, "outstanding" = the unpaid
+    # ones; the two add up to expected_collection. This is collection completeness for
+    # the year's rent, distinct from accrual revenue (total_contract_value) below.
+    rent_filter = "AND COALESCE(c.payment_method, '') NOT IN ('refund', 'balance_due')"
+    date_clause = " AND c.due_date BETWEEN :start_date AND :end_date" if start_date and end_date else ""
+
     cleared_sql = text(f"""
         SELECT COALESCE(SUM(c.amount), 0) as total
         FROM tenancy_cheques c
         JOIN tenancies t ON c.tenancy_id = t.id
         WHERE c.status = 'cleared'
+        {rent_filter}
         {property_filter}
-    """ + (" AND c.cleared_date BETWEEN :start_date AND :end_date" if start_date and end_date else ""))
+    """ + date_clause)
 
-    # Get pending cheque amounts (filter by cheque due date within period)
     pending_sql = text(f"""
         SELECT COALESCE(SUM(c.amount), 0) as total
         FROM tenancy_cheques c
         JOIN tenancies t ON c.tenancy_id = t.id
         WHERE c.status IN ('pending', 'deposited')
-        AND t.status IN ('active', 'renewed')
+        {rent_filter}
         {property_filter}
-    """ + (" AND c.due_date BETWEEN :start_date AND :end_date" if start_date and end_date else ""))
+    """ + date_clause)
 
     # Get active tenancy count
     count_sql = text(f"""
@@ -1458,6 +1463,7 @@ def get_annual_revenue(
     return AnnualRevenueResponse(
         total_cleared=cleared,
         total_pending=pending,
+        expected_collection=cleared + pending,
         total_contract_value=contract_value,
         active_tenancies=active_count
     )
