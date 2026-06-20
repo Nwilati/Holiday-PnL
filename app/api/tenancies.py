@@ -1425,6 +1425,27 @@ def get_annual_revenue(
     contract_value = db.execute(contract_sql, params).scalar() or Decimal('0')
     active_count = db.execute(count_sql, params).scalar() or 0
 
+    # Early-terminated tenancies are dropped from contract_value above (the filter
+    # only keeps active/renewed), which would zero out the revenue of a property
+    # whose only tenancy was terminated. They still earned rent for the occupied
+    # period, so recognise rent_for_occupancy here — the same figure the
+    # termination journal posts to Rent Revenue once the settlement clears.
+    terminated_q = db.query(Tenancy).filter(
+        text("status::text = 'terminated'"),
+        Tenancy.termination_date.isnot(None),
+    )
+    if property_id:
+        terminated_q = terminated_q.filter(Tenancy.property_id == property_id)
+    if start_date and end_date:
+        terminated_q = terminated_q.filter(
+            Tenancy.contract_start <= end_date,
+            Tenancy.contract_end >= start_date,
+        )
+    for t in terminated_q.all():
+        # charge_penalty does not affect rent_for_occupancy, so its value is irrelevant here.
+        s = calculate_termination_settlement(db, t, t.termination_date, False)
+        contract_value += s['rent_for_occupancy']
+
     return AnnualRevenueResponse(
         total_cleared=cleared,
         total_pending=pending,

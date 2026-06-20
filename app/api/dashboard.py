@@ -8,6 +8,7 @@ from decimal import Decimal
 from app.core.database import get_db
 from app.models.models import Booking, Expense, Property, Channel, ExpenseCategory, Tenancy, TenancyCheque
 from app.schemas.schemas import DashboardKPIs, MonthlyRevenue, ChannelPerformance, ExpenseBreakdown
+from app.api.accounting import calculate_termination_settlement
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -519,6 +520,21 @@ def get_property_roi(
             Tenancy.contract_end >= start
         ).scalar() or 0
 
+        # Early-terminated tenancies are excluded by the 'active' filter above; still
+        # recognise the rent they earned for the occupied period (rent_for_occupancy),
+        # consistent with the annual-revenue dashboard and the termination journal.
+        terminated = db.query(Tenancy).filter(
+            Tenancy.property_id == prop.id,
+            cast(Tenancy.status, String) == 'terminated',
+            Tenancy.termination_date.isnot(None),
+            Tenancy.contract_start <= end,
+            Tenancy.contract_end >= start
+        ).all()
+        terminated_revenue = sum(
+            float(calculate_termination_settlement(db, t, t.termination_date, False)['rent_for_occupancy'])
+            for t in terminated
+        )
+
         # Get expenses
         expenses = db.query(
             func.sum(Expense.total_amount).label('expenses')
@@ -528,7 +544,7 @@ def get_property_roi(
             Expense.expense_date <= end
         ).scalar() or 0
 
-        total_revenue = float(revenue) + float(tenancy_revenue)
+        total_revenue = float(revenue) + float(tenancy_revenue) + terminated_revenue
         total_expenses = float(expenses)
         noi = total_revenue - total_expenses
         purchase_price = float(prop.purchase_price)
