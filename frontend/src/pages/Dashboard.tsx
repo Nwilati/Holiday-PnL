@@ -44,6 +44,7 @@ interface UpcomingCheque {
 interface AnnualRevenue {
   total_cleared: number;
   total_pending: number;
+  expected_collection: number;
   total_contract_value: number;
   active_tenancies: number;
 }
